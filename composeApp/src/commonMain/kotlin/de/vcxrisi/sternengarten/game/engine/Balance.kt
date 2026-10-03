@@ -1,9 +1,12 @@
 package de.vcxrisi.sternengarten.game.engine
 
+import de.vcxrisi.sternengarten.game.model.Artifact
+import de.vcxrisi.sternengarten.game.model.CosmicEvent
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.LifePhase
 import de.vcxrisi.sternengarten.game.model.Star
 import de.vcxrisi.sternengarten.game.model.StarType
+import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
 import kotlin.math.floor
 import kotlin.math.pow
@@ -25,6 +28,10 @@ object Balance {
     const val PULSAR_RANGE = 3
     const val BLUE_GIANT_CROWDING = 0.15
     const val BINARY_PAIR_MULT = 2.0
+    const val NEUTRON_LEVEL_BONUS = 5
+    const val MAGNETAR_AURA = 0.60
+    const val NURSERY_AURA = 0.20
+    const val QUASAR_PER_STAR = 0.03
 
     const val BLACK_HOLE_SHARE = 0.5
     const val BLACK_HOLE_RELEASE_MULT = 3.0
@@ -36,22 +43,36 @@ object Balance {
 
     const val DISCOVERY_BONUS = 0.10
     const val DARK_MATTER_BONUS = 0.02
+    const val ACHIEVEMENT_BONUS = 0.02
 
     const val COMET_BOOST_MULT = 5.0
     const val COMET_BOOST_SECONDS = 60.0
+    const val METEOR_REWARD_SECONDS = 20.0
+    const val METEOR_INTERVAL = 2.5
 
     const val BASE_OFFLINE_SECONDS = 2 * 3600.0
     const val OFFLINE_SECONDS_PER_DEEP_SLEEP = 2 * 3600.0
+    const val PASS_OFFLINE_SECONDS = 4 * 3600.0
+    const val PASS_PRODUCTION_MULT = 2.0
 
     const val REFUND_SHARE = 0.5
+
+    const val SOLAR_STORM_MULT = 3.0
+    const val DARK_TIDE_MULT = 3.0
+
+    /** Kristalle, die ein Artefakt auf Höchststufe beim erneuten Fund zurückgibt. */
+    const val MAXED_ARTIFACT_REFUND = 20
 
     fun gardenRadius(state: GameState): Int =
         (BASE_RADIUS + state.level(Upgrade.NEBULA_EXPANSION) + state.level(Upgrade.PRIMORDIAL_NEBULA) + state.law.radiusDelta)
             .coerceIn(MIN_RADIUS, MAX_RADIUS)
 
+    fun costMultiplier(state: GameState): Double =
+        state.law.costMult * (if (state.eventKind == CosmicEvent.STAR_RAIN) 0.5 else 1.0)
+
     fun starCost(state: GameState, type: StarType): Double {
         val owned = state.stars.values.count { it.type == type }
-        return type.baseCost * type.costGrowth.pow(owned) * state.law.costMult
+        return type.baseCost * type.costGrowth.pow(owned) * costMultiplier(state)
     }
 
     fun levelUpCost(state: GameState, star: Star): Double =
@@ -64,7 +85,13 @@ object Balance {
         upgrade.baseCost * upgrade.costGrowth.pow(state.level(upgrade))
 
     fun effectiveLifespan(state: GameState, type: StarType): Double? =
-        type.lifespan?.let { it * (1.0 + 0.25 * state.level(Upgrade.LONGEVITY)) }
+        type.lifespan?.let {
+            it * (1.0 + 0.25 * state.level(Upgrade.LONGEVITY)) *
+                (1.0 + Artifact.EMBER.perLevel * state.artifactLevel(Artifact.EMBER))
+        }
+
+    fun agingMultiplier(state: GameState): Double =
+        state.law.agingMult * (if (state.eventKind == CosmicEvent.SOLAR_STORM) 2.0 else 1.0)
 
     fun phaseOf(state: GameState, star: Star): LifePhase {
         if (star.whiteDwarf) return LifePhase.WHITE_DWARF
@@ -80,28 +107,58 @@ object Balance {
         LifePhase.WHITE_DWARF -> WHITE_DWARF_MULT
     }
 
+    /** Faktor auf alle Nachbarschaftsboni (Gelbe Sterne, Pulsare, Magnetare, Nebelwiegen). */
+    fun auraMultiplier(state: GameState): Double =
+        state.law.auraMult *
+            (1.0 + Artifact.GRAVITON_LENS.perLevel * state.artifactLevel(Artifact.GRAVITON_LENS)) *
+            (if (state.eventKind == CosmicEvent.GRAVITY_WAVE) 2.0 else 1.0)
+
+    fun constellationMultiplier(state: GameState): Double =
+        state.law.constellationMult * (1.0 + Artifact.STAR_CHART.perLevel * state.artifactLevel(Artifact.STAR_CHART))
+
     fun supernovaElements(state: GameState, star: Star): Double =
-        (1.0 + (star.level - 1) * 0.25) * state.law.supernovaMult
+        (1.0 + (star.level - 1) * 0.25) * state.law.supernovaMult *
+            (1.0 + Artifact.PHOENIX_FEATHER.perLevel * state.artifactLevel(Artifact.PHOENIX_FEATHER))
 
     fun supernovaEnrichment(state: GameState): Double =
         ENRICHMENT_PER_SUPERNOVA * (1.0 + 0.5 * state.level(Upgrade.ASH_FERTILIZER)) * state.law.supernovaMult
+
+    fun blackHoleReleaseMultiplier(state: GameState): Double =
+        BLACK_HOLE_RELEASE_MULT + Artifact.HORIZON_SHARD.perLevel * state.artifactLevel(Artifact.HORIZON_SHARD)
 
     fun globalMultiplier(state: GameState): Double =
         (1.0 + 0.25 * state.level(Upgrade.STELLAR_WIND)) *
             1.5.pow(state.level(Upgrade.FUSION)) *
             2.0.pow(state.level(Upgrade.DARK_ENERGY)) *
             (1.0 + DISCOVERY_BONUS * state.discovered.size) *
-            (1.0 + DARK_MATTER_BONUS * state.darkMatter)
+            (1.0 + DARK_MATTER_BONUS * state.darkMatter) *
+            (1.0 + ACHIEVEMENT_BONUS * state.achievements.size) *
+            (1.0 + Artifact.SEXTANT.perLevel * state.artifactLevel(Artifact.SEXTANT)) *
+            Artifact.PRIMORDIAL_CRYSTAL.perLevel.pow(state.artifactLevel(Artifact.PRIMORDIAL_CRYSTAL)) *
+            (if (state.owns(StoreProduct.WANDERER_PASS)) PASS_PRODUCTION_MULT else 1.0)
 
     fun darkMatterGain(state: GameState): Double =
-        floor(sqrt(state.runStardust / 1_000_000.0) * state.law.darkMatterMult)
+        floor(
+            sqrt(state.runStardust / 1_000_000.0) * state.law.darkMatterMult *
+                (1.0 + Artifact.DARK_COMPASS.perLevel * state.artifactLevel(Artifact.DARK_COMPASS)),
+        )
 
     fun maxOfflineSeconds(state: GameState): Double =
-        BASE_OFFLINE_SECONDS + OFFLINE_SECONDS_PER_DEEP_SLEEP * state.level(Upgrade.DEEP_SLEEP)
+        BASE_OFFLINE_SECONDS +
+            OFFLINE_SECONDS_PER_DEEP_SLEEP * state.level(Upgrade.DEEP_SLEEP) +
+            Artifact.CHRONOMETER.perLevel * state.artifactLevel(Artifact.CHRONOMETER) +
+            (if (state.owns(StoreProduct.WANDERER_PASS)) PASS_OFFLINE_SECONDS else 0.0)
 
     fun startingStardust(state: GameState): Double =
         15.0 + if (state.level(Upgrade.STARDUST_MEMORY) > 0) 100.0 * 10.0.pow(state.level(Upgrade.STARDUST_MEMORY)) else 0.0
 
     fun cometInterval(state: GameState, roll: Double): Double =
         (45.0 + 60.0 * roll) / (1.0 + 0.3 * state.level(Upgrade.COMET_LURE))
+
+    fun cometRewardMultiplier(state: GameState): Double =
+        (1.0 + 0.5 * state.level(Upgrade.COMET_LURE)) *
+            (1.0 + Artifact.COMET_HARP.perLevel * state.artifactLevel(Artifact.COMET_HARP))
+
+    /** Abstand bis zum nächsten kosmischen Ereignis. */
+    fun eventInterval(roll: Double): Double = 240.0 + 240.0 * roll
 }

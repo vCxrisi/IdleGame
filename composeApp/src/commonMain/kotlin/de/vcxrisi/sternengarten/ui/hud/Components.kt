@@ -5,14 +5,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -22,15 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.vcxrisi.sternengarten.ui.render.StarVisual
 import de.vcxrisi.sternengarten.ui.render.drawStar
 import de.vcxrisi.sternengarten.ui.theme.Palette
@@ -105,11 +112,11 @@ fun GlowButton(
                 indication = null,
                 onClick = onClick,
             )
-            .padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 6.dp else 9.dp),
+            .padding(horizontal = if (compact) 6.dp else 14.dp, vertical = if (compact) 6.dp else 9.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Txt(text, Type.Label, color = Palette.Text, maxLines = 1)
+            Txt(text, if (compact) Type.Label.copy(fontSize = 14.sp) else Type.Label, color = Palette.Text, maxLines = 1)
             if (subtitle != null) Txt(subtitle, Type.Small, color = color, maxLines = 1)
         }
     }
@@ -154,17 +161,110 @@ fun GlowBar(fraction: Float, color: Color, modifier: Modifier = Modifier) {
 
 /** Kleine Kennzahl mit Farbpunkt: "● 12,5K Elemente". */
 @Composable
-fun CurrencyChip(value: String, label: String, color: Color, modifier: Modifier = Modifier) {
-    GlassPanel(modifier, shape = RoundedCornerShape(50), padding = PaddingValues(horizontal = 10.dp, vertical = 5.dp), tint = color.copy(alpha = 0.45f)) {
+fun CurrencyChip(
+    value: String,
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    crystal: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) {
+    val clickable = if (onClick != null) {
+        Modifier.clip(RoundedCornerShape(50)).clickable(onClick = onClick)
+    } else Modifier
+    GlassPanel(modifier.then(clickable), shape = RoundedCornerShape(50), padding = PaddingValues(horizontal = 10.dp, vertical = 5.dp), tint = color.copy(alpha = 0.45f)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Canvas(Modifier.size(8.dp)) {
-                drawCircle(color.copy(alpha = 0.35f), size.minDimension)
-                drawCircle(color, size.minDimension / 2f)
+            if (crystal) {
+                CrystalIcon(Modifier.size(12.dp))
+            } else {
+                Canvas(Modifier.size(8.dp)) {
+                    drawCircle(color.copy(alpha = 0.35f), size.minDimension)
+                    drawCircle(color, size.minDimension / 2f)
+                }
             }
             Spacer(Modifier.size(6.dp))
             Txt(value, Type.Label, color = color, maxLines = 1)
             Spacer(Modifier.size(4.dp))
             Txt(label, Type.Small, maxLines = 1)
+        }
+    }
+}
+
+/** Facettierter Kristall – Symbol der Premium-Währung. */
+@Composable
+fun CrystalIcon(modifier: Modifier = Modifier, color: Color = Palette.Crystal) {
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val outline = Path().apply {
+            moveTo(w * 0.5f, 0f); lineTo(w, h * 0.38f); lineTo(w * 0.5f, h); lineTo(0f, h * 0.38f); close()
+        }
+        drawPath(outline, Brush.verticalGradient(listOf(Color.White, color, color.copy(alpha = 0.7f))))
+        drawLine(Color.White.copy(alpha = 0.7f), Offset(0f, h * 0.38f), Offset(w, h * 0.38f), strokeWidth = 1f)
+        drawLine(Color.White.copy(alpha = 0.5f), Offset(w * 0.5f, 0f), Offset(w * 0.5f, h), strokeWidth = 1f)
+    }
+}
+
+/** Reiter für Panels mit mehreren Bereichen. */
+@Composable
+fun <T> TabRow(tabs: List<T>, selected: T, label: (T) -> String, color: Color, onSelect: (T) -> Unit, badge: (T) -> Int = { 0 }) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.05f)).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        for (tab in tabs) {
+            val active = tab == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(if (active) color.copy(alpha = 0.25f) else Color.Transparent)
+                    .clickable { onSelect(tab) }
+                    .padding(vertical = 7.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt(label(tab), Type.Small, color = if (active) Palette.Text else Palette.TextDim, maxLines = 1)
+                    val count = badge(tab)
+                    if (count > 0) {
+                        Spacer(Modifier.width(4.dp))
+                        Badge(count)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Kleiner roter Zähler für Abholbares. */
+@Composable
+fun Badge(count: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(16.dp).clip(RoundedCornerShape(50)).background(Palette.Danger),
+        contentAlignment = Alignment.Center,
+    ) {
+        Txt("$count", Type.Small.copy(fontSize = 9.sp), color = Color.White, maxLines = 1)
+    }
+}
+
+/** Zeile mit Titel, Fortschrittsbalken und optionalem Knopf rechts. */
+@Composable
+fun ProgressRow(
+    title: String,
+    detail: String,
+    fraction: Float,
+    color: Color,
+    action: (@Composable () -> Unit)? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Txt(title, Type.Label, maxLines = 2)
+            GlowBar(fraction, color, Modifier.fillMaxWidth().height(5.dp))
+            Txt(detail, Type.Small, maxLines = 1)
+        }
+        if (action != null) {
+            Spacer(Modifier.width(10.dp))
+            action()
         }
     }
 }

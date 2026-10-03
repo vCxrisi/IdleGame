@@ -2,9 +2,9 @@ package de.vcxrisi.sternengarten.game.save
 
 import com.russhwolf.settings.Settings
 import de.vcxrisi.sternengarten.game.model.GameState
-import kotlinx.serialization.json.Json
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
+import kotlinx.serialization.json.Json
 
 /** Speichert den Spielstand als JSON in den plattformeigenen Einstellungen (SharedPreferences / NSUserDefaults). */
 class SaveRepository(private val settings: Settings = Settings()) {

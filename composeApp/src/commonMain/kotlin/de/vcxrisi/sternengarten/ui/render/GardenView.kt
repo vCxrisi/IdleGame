@@ -32,8 +32,10 @@ import androidx.compose.ui.unit.sp
 import de.vcxrisi.sternengarten.game.engine.Balance
 import de.vcxrisi.sternengarten.game.engine.BoardAnalysis
 import de.vcxrisi.sternengarten.game.engine.ConstellationInstance
+import de.vcxrisi.sternengarten.game.model.ActiveEvent
 import de.vcxrisi.sternengarten.game.model.Comet
 import de.vcxrisi.sternengarten.game.model.ConstellationKind
+import de.vcxrisi.sternengarten.game.model.CosmicEvent
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.LifePhase
@@ -41,6 +43,7 @@ import de.vcxrisi.sternengarten.game.model.Star
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.ui.fx.ParticleSystem
 import de.vcxrisi.sternengarten.ui.theme.starColors
+import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.sin
@@ -159,7 +162,7 @@ fun GardenView(
             Offset(sin(clock * 71f) * camera.shake, sin(clock * 53f + 1f) * camera.shake)
         } else Offset.Zero
 
-        drawNebula(clock, state.law.hue, camera.pan)
+        drawNebula(clock, state.nebulaHue, camera.pan)
         starfield.draw(this, clock, camera.pan, density)
 
         withTransform({
@@ -185,6 +188,7 @@ fun GardenView(
             particles.draw(this)
         }
 
+        state.event?.let { drawEventOverlay(it, clock, camera.toScreen(Offset.Zero, size), layout.size * camera.zoom) }
         state.comet?.let { drawComet(it, cometProgress, clock) }
     }
 }
@@ -297,12 +301,14 @@ private fun DrawScope.drawConstellations(instances: List<ConstellationInstance>,
     for (c in instances) {
         val m = c.members
         when (c.kind) {
-            ConstellationKind.TRIO, ConstellationKind.RED_THREAD, ConstellationKind.RAINBOW ->
+            ConstellationKind.TRIO, ConstellationKind.RED_THREAD, ConstellationKind.RAINBOW,
+            ConstellationKind.LADDER, ConstellationKind.KILONOVA ->
                 for (i in 0 until m.size - 1) add(m[i], m[i + 1], c.kind)
             ConstellationKind.TRIANGULUM -> {
                 add(m[0], m[1], c.kind); add(m[1], m[2], c.kind); add(m[2], m[0], c.kind)
             }
-            ConstellationKind.CROWN, ConstellationKind.SUN_CROWN, ConstellationKind.EVENT_HORIZON -> {
+            ConstellationKind.CROWN, ConstellationKind.SUN_CROWN, ConstellationKind.EVENT_HORIZON,
+            ConstellationKind.QUASAR_THRONE -> {
                 val ring = m.drop(1)
                 for (i in ring.indices) add(ring[i], ring[(i + 1) % ring.size], c.kind)
                 if (c.kind != ConstellationKind.CROWN) for (r in ring) add(m[0], r, c.kind)
@@ -333,23 +339,76 @@ private fun DrawScope.drawComet(comet: Comet, progress: Float, clock: Float) {
         val v = Offset(it.x * size.width, it.y * size.height)
         v / v.getDistance()
     }
-    val tailLength = size.minDimension * 0.28f
+    val scale = if (comet.meteor) 0.55f else 1f
+    val tailLength = size.minDimension * 0.28f * scale
     val tail = head - dir * tailLength
-    val core = Color(0xFFDDF6FF)
-    val ion = Color(0xFF6FD8FF)
+    val core = if (comet.meteor) Color(0xFFFFE6C2) else Color(0xFFDDF6FF)
+    val ion = if (comet.meteor) Color(0xFFFF8A4D) else Color(0xFF6FD8FF)
     drawLine(
         Brush.linearGradient(listOf(ion.copy(alpha = 0.0f), ion.copy(alpha = 0.55f)), tail, head),
-        tail, head, strokeWidth = 14f * density, blendMode = BlendMode.Plus,
+        tail, head, strokeWidth = 14f * density * scale, blendMode = BlendMode.Plus,
     )
     drawLine(
         Brush.linearGradient(listOf(Color.Transparent, core.copy(alpha = 0.9f)), head - dir * tailLength * 0.6f, head),
         head - dir * tailLength * 0.6f, head, strokeWidth = 3f * density, blendMode = BlendMode.Plus,
     )
     val pulse = 1f + 0.15f * sin(clock * 9f)
-    drawGlow(head, 46f * density * pulse, ion, 0.7f)
-    drawGlow(head, 18f * density, Color.White, 1f)
+    drawGlow(head, 46f * density * pulse * scale, ion, 0.7f)
+    drawGlow(head, 18f * density * scale, Color.White, 1f)
     // Hinweisring: "tipp mich"
-    drawCircle(core.copy(alpha = 0.35f + 0.25f * sin(clock * 6f)), 30f * density * pulse, head, style = Stroke(width = 1.5f * density))
+    drawCircle(core.copy(alpha = 0.35f + 0.25f * sin(clock * 6f)), 30f * density * pulse * scale.coerceAtLeast(0.8f), head, style = Stroke(width = 1.5f * density))
+}
+
+/** Bildschirmeffekte für laufende kosmische Ereignisse. */
+private fun DrawScope.drawEventOverlay(event: ActiveEvent, clock: Float, gardenCenter: Offset, cell: Float) {
+    val fadeIn = ((event.kind.duration - event.remaining) / 1.5).toFloat().coerceIn(0f, 1f)
+    val fadeOut = (event.remaining / 1.5).toFloat().coerceIn(0f, 1f)
+    val strength = min(fadeIn, fadeOut)
+    if (strength <= 0f) return
+    val color = Color.hsv(event.kind.hue, 0.7f, 1f)
+    when (event.kind) {
+        CosmicEvent.SOLAR_STORM -> {
+            val flare = Offset(size.width * 0.15f, size.height * 0.1f)
+            drawGlow(flare, size.maxDimension * (0.55f + 0.05f * sin(clock * 3f)), color, 0.35f * strength)
+            for (k in 0 until 7) {
+                val a = 0.2f + k * 0.18f + 0.05f * sin(clock * 2f + k)
+                val end = Offset(flare.x + cos(a) * size.maxDimension, flare.y + sin(a) * size.maxDimension)
+                drawLine(
+                    Brush.linearGradient(listOf(color.copy(alpha = 0.25f * strength), Color.Transparent), flare, end),
+                    flare, end, strokeWidth = 30f, blendMode = BlendMode.Plus,
+                )
+            }
+        }
+        CosmicEvent.GRAVITY_WAVE -> {
+            for (k in 0 until 3) {
+                val t = (clock * 0.5f + k / 3f) % 1f
+                drawCircle(
+                    color.copy(alpha = 0.35f * (1f - t) * strength),
+                    radius = cell * (1f + t * 9f), center = gardenCenter,
+                    style = Stroke(width = cell * 0.18f * (1f - t)), blendMode = BlendMode.Plus,
+                )
+            }
+        }
+        CosmicEvent.DARK_TIDE -> drawRect(
+            Brush.radialGradient(
+                0.35f to Color.Transparent,
+                1f to Color(0xFF3A0F6E).copy(alpha = (0.55f + 0.15f * sin(clock * 2f)) * strength),
+                center = Offset(size.width / 2f, size.height / 2f), radius = size.maxDimension * 0.7f,
+            ),
+        )
+        CosmicEvent.STAR_RAIN -> {
+            for (k in 0 until 28) {
+                val seed = k * 0.618f
+                val x = ((seed * 997f) % 1f) * size.width
+                val y = ((clock * (0.15f + (k % 5) * 0.03f) + seed) % 1f) * size.height
+                drawGlow(Offset(x, y), 10f * density, color, 0.8f * strength)
+                drawLine(color.copy(alpha = 0.4f * strength), Offset(x, y - 26f * density), Offset(x, y), strokeWidth = 2f * density, blendMode = BlendMode.Plus)
+            }
+        }
+        CosmicEvent.METEOR_SHOWER -> drawRect(
+            Brush.verticalGradient(listOf(color.copy(alpha = 0.18f * strength), Color.Transparent), endY = size.height * 0.5f),
+        )
+    }
 }
 
 /** Farbe, in der ein Stern Staubpartikel abgibt. */

@@ -12,6 +12,8 @@ data class Comet(
     val endY: Float,
     val duration: Double,
     val elapsed: Double = 0.0,
+    /** Meteore (während eines Meteorschauers) sind kleiner, schneller und bringen immer Sternenstaub. */
+    val meteor: Boolean = false,
 )
 
 @Serializable
@@ -41,8 +43,47 @@ data class GameState(
     val lastSavedEpochMs: Long = 0,
     /** Nach dem Urknall: zur Wahl stehende Naturgesetze der nächsten Galaxie. */
     val lawChoices: List<GalaxyLaw> = emptyList(),
+
+    // ---- Kosmische Ereignisse und Galaxie-Ziele (pro Galaxie)
+    val event: ActiveEvent? = null,
+    val eventCooldown: Double = 150.0,
+    val galaxyGoals: List<GalaxyGoal> = emptyList(),
+    val runSupernovas: Int = 0,
+
+    // ---- Dauerhafter Fortschritt
+    /** Premium-Währung: im Spiel verdient oder im Store gekauft. */
+    val crystals: Int = 0,
+    val stats: Stats = Stats(),
+    val achievements: Set<Achievement> = emptySet(),
+    val missions: List<Mission> = emptyList(),
+    val missionDay: Long = -1,
+    val loginStreak: Int = 0,
+    val lastLoginDay: Long = -1,
+    /** Noch abzuholende Login-Belohnung des heutigen Tages. */
+    val pendingLoginReward: LoginReward? = null,
+    val artifacts: Map<Artifact, Int> = emptyMap(),
+    val capsules: Int = 0,
+    val ownedThemes: Set<NebulaTheme> = setOf(NebulaTheme.GALAXY),
+    val activeTheme: NebulaTheme = NebulaTheme.GALAXY,
+    val ownedSparks: Set<SparkStyle> = setOf(SparkStyle.CLASSIC),
+    val activeSpark: SparkStyle = SparkStyle.CLASSIC,
+
+    // ---- Store
+    /** Gekaufte, dauerhafte Store-Produkte (Product-IDs). */
+    val entitlements: Set<String> = emptySet(),
+    /** Bereits gutgeschriebene Transaktionen – verhindert doppelte Gutschrift. */
+    val processedTransactions: Set<String> = emptySet(),
 ) {
     fun level(upgrade: Upgrade): Int = upgrades[upgrade] ?: 0
+
+    fun artifactLevel(artifact: Artifact): Int = artifacts[artifact] ?: 0
+
+    fun owns(product: StoreProduct): Boolean = product.productId in entitlements
+
+    val eventKind: CosmicEvent? get() = event?.kind
+
+    /** Farbton des Nebels: gewähltes Thema oder das Naturgesetz der Galaxie. */
+    val nebulaHue: Float get() = activeTheme.hue ?: law.hue
 
     fun amount(currency: Currency): Double = when (currency) {
         Currency.STARDUST -> stardust

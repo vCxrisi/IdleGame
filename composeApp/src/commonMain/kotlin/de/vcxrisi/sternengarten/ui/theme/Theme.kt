@@ -5,6 +5,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import de.vcxrisi.sternengarten.game.model.Currency
+import de.vcxrisi.sternengarten.game.model.Rarity
 import de.vcxrisi.sternengarten.game.model.StarType
 
 object Palette {
@@ -26,6 +27,8 @@ object Palette {
     val Danger = Color(0xFFFF7A8A)
     val Accent = Color(0xFF8FD3FF)
     val Boost = Color(0xFFFFA94D)
+    val Crystal = Color(0xFFFF8FE0)
+    val Success = Color(0xFF8BF5A6)
 
     fun currency(currency: Currency) = when (currency) {
         Currency.STARDUST -> Stardust
@@ -37,6 +40,8 @@ object Palette {
 /** Farben eines Sterntyps: heller Kern und farbiges Leuchten. */
 data class StarColors(val core: Color, val glow: Color, val secondary: Color = glow)
 
+fun rarityColor(rarity: Rarity): Color = Color.hsv(rarity.hue, if (rarity == Rarity.COMMON) 0.25f else 0.6f, 1f)
+
 fun starColors(type: StarType): StarColors = when (type) {
     StarType.RED_DWARF -> StarColors(Color(0xFFFFD9C2), Color(0xFFFF4F3A))
     StarType.YELLOW_STAR -> StarColors(Color(0xFFFFFBEA), Color(0xFFFFC53D))
@@ -44,6 +49,10 @@ fun starColors(type: StarType): StarColors = when (type) {
     StarType.BINARY -> StarColors(Color(0xFFFFF0DC), Color(0xFFC08BFF), Color(0xFF8ED6FF))
     StarType.PULSAR -> StarColors(Color(0xFFEFFFFF), Color(0xFF3DFFE0))
     StarType.BLACK_HOLE -> StarColors(Color(0xFF000000), Color(0xFFFF9A3D), Color(0xFFFF3DAA))
+    StarType.NEUTRON_STAR -> StarColors(Color(0xFFFFFFFF), Color(0xFF9FE7FF), Color(0xFFE8F8FF))
+    StarType.MAGNETAR -> StarColors(Color(0xFFFFF0FF), Color(0xFFFF4FD8), Color(0xFF7A5CFF))
+    StarType.NEBULA_NURSERY -> StarColors(Color(0xFFFFE6F4), Color(0xFFFF8FC8), Color(0xFF8FD8FF))
+    StarType.QUASAR -> StarColors(Color(0xFFFFFFFF), Color(0xFFFFE27A), Color(0xFF7AD8FF))
 }
 
 val WhiteDwarfColors = StarColors(Color(0xFFFFFFFF), Color(0xFFBFD8FF))

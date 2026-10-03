@@ -4,32 +4,91 @@ Ein Idle Game für **Android und iOS**, gebaut mit **Kotlin Multiplatform + Comp
 Du pflanzt Sterne in einen lebendigen Nebel. Wie viel dein Garten produziert, hängt davon ab, **wo** du sie hinsetzt, nicht nur davon, wie viel du kaufst.
 
 <p>
-  <img src="docs/screenshots/01-garten.jpg" width="200" alt="Sternengarten mit Sternbildern">
-  <img src="docs/screenshots/02-stern-info.jpg" width="200" alt="Stern-Details">
-  <img src="docs/screenshots/04-sternbilder.jpg" width="200" alt="Sternbild-Katalog">
-  <img src="docs/screenshots/06-urknall.jpg" width="200" alt="Galaxiewahl nach dem Urknall">
+  <img src="docs/screenshots/01-garten.jpg" width="190" alt="Garten während einer Gravitationswelle">
+  <img src="docs/screenshots/03-shop.jpg" width="190" alt="Shop mit Kristallen und Angeboten">
+  <img src="docs/screenshots/05-kapsel.jpg" width="190" alt="Ein legendäres Artefakt wird enthüllt">
+  <img src="docs/screenshots/06-ziele.jpg" width="190" alt="Login-Kalender und tägliche Missionen">
+</p>
+<p>
+  <img src="docs/screenshots/08-sonnensturm.jpg" width="190" alt="Kosmisches Ereignis Sonnensturm">
+  <img src="docs/screenshots/02-stern-info.jpg" width="190" alt="Details eines Neutronensterns">
+  <img src="docs/screenshots/04-artefakte.jpg" width="190" alt="Artefakt-Sammlung">
+  <img src="docs/screenshots/07-erfolge.jpg" width="190" alt="Erfolge">
 </p>
 
 ## Spielidee
 
 | Mechanik | Was sie besonders macht |
 |---|---|
-| **Räumliches Idle-Spiel** | Sterne stehen auf einem Hex-Raster und beeinflussen ihre Nachbarn. Der Gelbe Stern wärmt seine Nachbarn. Der Blaue Riese braucht Platz. Doppelsterne wollen paarweise stehen. Pulsare strahlen entlang ihrer Achsen. Schwarze Löcher saugen Produktion auf und geben sie auf Antippen dreifach zurück. |
-| **Sternen-Lebenszyklus** | Sterne werden geboren, altern und vergehen. Blaue Riesen explodieren als **Supernova**, bringen **Elemente** und düngen die Felder ringsum dauerhaft. Gelbe Sterne und Doppelsterne werden zu Weißen Zwergen. Der Garten ist ständig in Bewegung, und das Säen und Ernten wird zur Strategie. |
-| **Sternbilder** | Bestimmte Formen bilden Sternbilder, zum Beispiel Linien, Dreiecke, Kronen oder ein Regenbogen aus vier Sternarten. Sie werden mit leuchtenden Linien verbunden und stärken ihre Mitglieder. Jedes entdeckte Sternbild gibt außerdem dauerhaft +10 %. |
-| **Urknall mit neuen Naturgesetzen** | Das Prestige bringt **Dunkle Materie**. Danach wählst du eine von drei neuen Galaxien mit einem eigenen Naturgesetz, etwa *Hohe Gravitation*, *Zeitdehnung*, *Entropie* oder *Himmelsharfe*. Dadurch spielt sich jeder Durchlauf anders. |
-| **Kometen** | Ab und zu fliegt ein Komet über den Bildschirm. Wer ihn antippt, bekommt Sternenregen oder einen Kometenrausch mit ×5 Produktion. |
-| **Offline-Fortschritt** | Während du weg bist, wird die Zeit vollständig simuliert, einschließlich Supernovas. Danach zeigt ein Dialog, was passiert ist. |
+| **Räumliches Idle-Spiel** | Zehn Sternarten stehen auf einem Hex-Raster und beeinflussen sich gegenseitig, siehe Tabelle unten. |
+| **Sternen-Lebenszyklus** | Sterne werden geboren, altern und vergehen. Blaue Riesen explodieren als Supernova, bringen Elemente und düngen die Felder ringsum. Das Säen und Ernten wird so zur Strategie. |
+| **Sternbilder** | Zehn Formen wie Linien, Dreiecke, Kronen, Himmelsleiter oder Quasar-Thron. Aktive Sternbilder stärken ihre Mitglieder, und jedes entdeckte gibt dauerhaft +10 %. |
+| **Kosmische Ereignisse** | Alle paar Minuten passiert etwas: *Sonnensturm*, *Gravitationswelle*, *Dunkle Flut*, *Sternenregen* oder ein *Meteorschauer*, dessen Meteore man antippen kann. Jedes Ereignis bringt eigene Effekte und ändert kurz die Regeln. |
+| **Urknall mit neuen Naturgesetzen** | Das Prestige bringt Dunkle Materie. Jede neue Galaxie hat ein eigenes Naturgesetz, etwa *Zeitdehnung*, *Entropie* oder *Himmelsharfe*, und **drei Galaxie-Ziele**. Wer alle drei erfüllt, bekommt eine Bonus-Kapsel. |
+| **Missionen & Erfolge** | Jeden Tag gibt es drei Missionen und einen Login-Kalender mit sieben Tagen. Dazu kommen 27 Erfolge, die jeweils Kristalle und dauerhaft +2 % Produktion bringen. |
+| **Artefakte** | Zehn sammelbare Artefakte in vier Seltenheiten, jedes mit dauerhaftem Bonus. Doppelte Funde erhöhen die Stufe bis 10. Die Fundchancen werden im Shop offen angezeigt. |
+| **Kosmetik** | Nebel-Themen wie Polarlicht, Glutnebel oder Königsgold sowie Funken-Stile wie Goldregen oder Regenbogen. |
+| **Kometen & Offline-Fortschritt** | Kometen fliegen ab und zu vorbei und lassen sich antippen. Die Zeit, in der du weg warst, wird vollständig simuliert, einschließlich Supernovas. |
 
-## Grafik
+### Sternarten
 
-Alles wird prozedural mit Compose Canvas gezeichnet, es gibt keine Bild-Assets:
-- Treibende Nebelschwaden und ein Sternenfeld mit drei Parallax-Ebenen.
-- Sterne mit Leuchthof, Korona und Beugungsspikes, gezeichnet mit additivem Blending.
-- Eigene Darstellungen für bestimmte Sternarten: kreisende Doppelsterne, rotierende Pulsar-Strahlen und Schwarze Löcher mit Akkretionsscheibe.
-- Ein Partikelsystem für Supernova-Schockwellen, Staubströme und den Kometenschweif.
-- Bildschirmwackeln und Haptik als Rückmeldung.
-- Pinch-Zoom und Verschieben auf dem Spielfeld.
+| Stern | Regel |
+|---|---|
+| Roter Zwerg | Günstig und ewig. |
+| Gelber Stern | +25 % für jeden Nachbarn, wird später zum Weißen Zwerg. |
+| Blauer Riese | Sehr stark, aber −15 % je belegtem Nachbarfeld. Endet als Supernova. |
+| Doppelstern | ×2, wenn ein zweiter Doppelstern daneben steht. |
+| Pulsar | +40 % entlang seiner drei Achsen, bis 3 Felder weit. |
+| **Neutronenstern** | Jeder Nachbar leistet, als wäre er 5 Stufen höher. |
+| Schwarzes Loch | Saugt die Hälfte der Produktion seiner Nachbarn auf. Antippen gibt das Dreifache frei. |
+| **Magnetar** | +60 % für Sterne in genau zwei Feldern Abstand. |
+| **Nebelwiege** | Produziert selbst nichts. Ihre Nachbarn altern nicht mehr und bekommen +20 %. |
+| **Quasar** | +3 % für alle Sterne je Stern im Garten. |
+
+## Ingame-Käufe
+
+Die Premium-Währung heißt **Sternenkristalle**. Man verdient sie auch im Spiel, über Missionen, Erfolge, Galaxie-Ziele und den Login-Bonus. Ausgeben kann man sie für Artefakt-Kapseln, Zeitsprünge, Kometenrausch und Kosmetik.
+
+Echtgeld-Produkte (alle vom Typ **In-App-Produkt**, keine Abos):
+
+| Produkt-ID | Inhalt | Typ | Richtpreis |
+|---|---|---|---|
+| `de.vcxrisi.sternengarten.crystals_100` | 100 Kristalle | verbrauchbar | 0,99 € |
+| `de.vcxrisi.sternengarten.crystals_550` | 550 Kristalle | verbrauchbar | 4,99 € |
+| `de.vcxrisi.sternengarten.crystals_1200` | 1.200 Kristalle | verbrauchbar | 9,99 € |
+| `de.vcxrisi.sternengarten.crystals_3500` | 3.500 Kristalle | verbrauchbar | 24,99 € |
+| `de.vcxrisi.sternengarten.starter_pack` | 300 Kristalle, Nebel „Königsgold“, 3 Kapseln | einmalig (nicht verbrauchbar) | 2,99 € |
+| `de.vcxrisi.sternengarten.wanderer_pass` | ×2 Produktion, +4 h Offline, Kometen automatisch fangen | dauerhaft (nicht verbrauchbar) | 7,99 € |
+
+Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur als Platzhalter, solange der Store noch lädt.
+
+### Technik
+
+- **Gemeinsame Schnittstelle:** `composeApp/src/commonMain/.../store/StoreGateway.kt`.
+- **Android:** `PlayStoreGateway` mit **Google Play Billing Library 8**.
+  - Kristalle werden verbraucht, Starterpaket und Sternenwanderer werden bestätigt.
+- **iOS:** `iosApp/iosApp/AppStoreGateway.swift` mit **StoreKit 2**.
+  - Nur verifizierte Transaktionen werden gutgeschrieben, inklusive `Transaction.updates`, `Transaction.unfinished` und Wiederherstellung.
+- **Desktop:** ein Test-Store, bei dem jeder Kauf sofort und kostenlos gelingt.
+- **Gutschrift** in `ShopSystem.grantPurchase`:
+  - Jede Transaktion wird genau einmal gutgeschrieben, die IDs werden im Spielstand gemerkt.
+  - Erst danach schließt das Spiel die Transaktion beim Store ab. So geht nach einem Absturz kein Kauf verloren.
+- **„Käufe wiederherstellen“** stellt dauerhafte Käufe wieder her, zahlt aber keine Kristalle erneut aus.
+
+> **Hinweis:** Die Käufe werden auf dem Gerät gutgeschrieben. Für ein Spiel mit großer Reichweite empfiehlt sich zusätzlich eine Server-Prüfung der Kaufbelege, über die Google Play Developer API bzw. die App Store Server API.
+
+### Einrichtung in den Stores
+
+**Google Play Console**
+1. App mit der Paket-ID `de.vcxrisi.sternengarten` anlegen und einen signierten Build in einen Test-Track hochladen, zum Beispiel „Interner Test“.
+2. Unter *Monetarisieren → Produkte → In-App-Produkte* alle sechs Produkt-IDs aus der Tabelle anlegen und aktivieren.
+3. Unter *Einstellungen → Lizenztests* deine Test-Konten eintragen. Käufe mit diesen Konten werden nicht abgerechnet.
+4. Die App aus dem Test-Track installieren. Käufe funktionieren nur mit einer über Play installierten App.
+
+**App Store Connect**
+1. App mit der Bundle-ID `de.vcxrisi.sternengarten` anlegen und deine Team-ID in `iosApp/Configuration/Config.xcconfig` eintragen.
+2. Unter *In-App-Käufe* die vier Kristall-Pakete als **Verbrauchsartikel** anlegen, Starterpaket und Sternenwanderer als **Nicht-Verbrauchsartikel**.
+3. Lokal testen: In Xcode über *File → New → File → StoreKit Configuration File* (mit „Sync with App Store Connect“) eine Testkonfiguration erzeugen und im Scheme unter *Run → Options → StoreKit Configuration* auswählen. Alternativ in TestFlight mit Sandbox-Konten testen.
 
 ## Projekt öffnen und starten
 
@@ -44,8 +103,7 @@ Alles wird prozedural mit Compose Canvas gezeichnet, es gibt keine Bild-Assets:
 3. **iOS** (nur auf dem Mac):
    - Entweder die iOS-Run-Konfiguration des KMP-Plugins in Android Studio verwenden.
    - Oder `iosApp/iosApp.xcodeproj` in Xcode öffnen und starten. Die Build-Phase ruft automatisch `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` auf.
-   - Für ein echtes Gerät trägst du deine Team-ID in `iosApp/Configuration/Config.xcconfig` ein.
-4. **Desktop** (zum schnellen Ausprobieren): `./gradlew :composeApp:run`
+4. **Desktop** mit Test-Store: `./gradlew :composeApp:run`
 5. **Tests der Spiellogik:** `./gradlew :composeApp:desktopTest`
 
 ## Aufbau
@@ -53,18 +111,25 @@ Alles wird prozedural mit Compose Canvas gezeichnet, es gibt keine Bild-Assets:
 ```
 composeApp/src/
   commonMain/kotlin/de/vcxrisi/sternengarten/
-    game/model/    Datenmodell: Hex-Raster, Sternarten, Naturgesetze, Upgrades, Sternbilder, Spielstand
-    game/engine/   Reine Spiellogik: GameEngine (Zeit, Aktionen, Urknall), BoardAnalyzer (Produktion, Sternbilder), Balance
+    game/model/    Datenmodell: Hex-Raster, Sternarten, Naturgesetze, Upgrades, Sternbilder,
+                   Fortschritt (Missionen, Erfolge, Ereignisse, Ziele), Sammlung (Artefakte, Kosmetik), Store-Katalog
+    game/engine/   Reine Spiellogik:
+                     GameEngine        Zeit, Aktionen, Ereignisse, Urknall
+                     BoardAnalyzer     Produktion, Sternbilder
+                     ProgressionSystem Missionen, Erfolge, Login, Galaxie-Ziele
+                     ShopSystem        Kristall-Angebote, Kapseln, Kosmetik, Kaufgutschrift
+                     Balance           alle Spielwerte
     game/save/     Speichern als JSON (multiplatform-settings)
-    ui/            GameController (Spielschleife, Autosave, Offline-Zeit), Theme, HUD, Panels
-    ui/render/     Nebel, Sterne, Raster, Kamera
+    store/         StoreGateway-Schnittstelle, Test-Store
+    ui/            GameController (Spielschleife, Autosave, Offline-Zeit, Store), Theme, HUD, Panels, Dialoge
+    ui/render/     Nebel, Sterne, Raster, Kamera, Ereignis-Effekte
     ui/fx/         Partikelsystem
-  commonTest/      Tests der Spiellogik
-  androidMain/     MainActivity, Manifest, adaptives App-Icon
+  commonTest/      Tests der Spiellogik (Engine, Inhalte, Shop, Käufe)
+  androidMain/     MainActivity, PlayStoreGateway, Manifest, adaptives App-Icon
   iosMain/         MainViewController für SwiftUI
-  desktopMain/     Desktop-Fenster
-iosApp/            Xcode-Projekt (SwiftUI-Hülle)
+  desktopMain/     Desktop-Fenster mit Test-Store
+iosApp/            Xcode-Projekt (SwiftUI-Hülle, AppStoreGateway mit StoreKit 2)
 ```
 
-Die Spiellogik ist unabhängig von der Oberfläche. Der Spielstand ist unveränderlich, und `GameEngine` arbeitet mit reinen Funktionen. Die Simulation läuft in festen Schritten von 0,1 s. Die Animationen laufen mit der vollen Bildrate.
-Alle Balance-Werte stehen gesammelt in `game/engine/Balance.kt`.
+Die Spiellogik ist unabhängig von der Oberfläche. Der Spielstand ist unveränderlich, und die Engine arbeitet mit reinen Funktionen. Die Simulation läuft in festen Schritten von 0,1 s. Die Animationen laufen mit der vollen Bildrate.
+Alle Spielwerte stehen gesammelt in `game/engine/Balance.kt`.

@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.toSize
 import de.vcxrisi.sternengarten.game.engine.BoardAnalysis
 import de.vcxrisi.sternengarten.game.engine.GameEvent
 import de.vcxrisi.sternengarten.game.model.GameState
+import de.vcxrisi.sternengarten.game.model.SparkStyle
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.ui.GameController
 import de.vcxrisi.sternengarten.ui.Sheet
@@ -39,14 +41,19 @@ import de.vcxrisi.sternengarten.ui.fx.ParticleSystem
 import de.vcxrisi.sternengarten.ui.hud.ActionBar
 import de.vcxrisi.sternengarten.ui.hud.BigBangSheet
 import de.vcxrisi.sternengarten.ui.hud.BuildBar
-import de.vcxrisi.sternengarten.ui.hud.CatalogSheet
+import de.vcxrisi.sternengarten.ui.hud.CapsuleRevealOverlay
+import de.vcxrisi.sternengarten.ui.hud.EventBanner
 import de.vcxrisi.sternengarten.ui.hud.FirstStepsHint
 import de.vcxrisi.sternengarten.ui.hud.GalaxySelectScreen
+import de.vcxrisi.sternengarten.ui.hud.GoalsSheet
+import de.vcxrisi.sternengarten.ui.hud.LoginRewardDialog
 import de.vcxrisi.sternengarten.ui.hud.OfflineDialog
 import de.vcxrisi.sternengarten.ui.hud.ResearchSheet
+import de.vcxrisi.sternengarten.ui.hud.ShopSheet
 import de.vcxrisi.sternengarten.ui.hud.StarInfoPanel
 import de.vcxrisi.sternengarten.ui.hud.ToastStack
 import de.vcxrisi.sternengarten.ui.hud.TopBar
+import de.vcxrisi.sternengarten.ui.hud.sparkPreviewColor
 import de.vcxrisi.sternengarten.ui.render.Camera
 import de.vcxrisi.sternengarten.ui.render.GardenView
 import de.vcxrisi.sternengarten.ui.render.HexLayout
@@ -99,6 +106,12 @@ fun GameScreen(controller: GameController) {
         }
     }
 
+    // Funken-Stil aus dem Shop färbt alle Partikel.
+    particles.palette = when (controller.state.activeSpark) {
+        SparkStyle.CLASSIC -> null
+        else -> { base -> sparkTint(controller.state.activeSpark, base) }
+    }
+
     // Ereignisse in Effekte übersetzen.
     DisposableEffect(controller, layout) {
         controller.onEvent = { event ->
@@ -149,7 +162,12 @@ fun GameScreen(controller: GameController) {
                         particles.shockwave(world, unit * 2.5f / camera.zoom, Color(0xFF6FD8FF), 0.9f)
                     }
                 }
-                is GameEvent.Unlocked -> Unit
+                is GameEvent.EventStarted -> {
+                    camera.shake = 6f
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+                is GameEvent.PurchaseGranted -> haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                else -> Unit
             }
         }
         onDispose { controller.onEvent = {} }
@@ -182,7 +200,8 @@ fun GameScreen(controller: GameController) {
             Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            TopBar(state, controller.analysis, Modifier.padding(12.dp))
+            TopBar(state, controller.analysis, { controller.sheet = Sheet.SHOP }, Modifier.padding(12.dp))
+            state.event?.let { EventBanner(it, Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp)) }
             ToastStack(controller.toasts, clock, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             Spacer(Modifier.weight(1f))
             FirstStepsHint(state, Modifier.padding(12.dp))
@@ -195,15 +214,37 @@ fun GameScreen(controller: GameController) {
 
         when (controller.sheet) {
             Sheet.RESEARCH -> ResearchSheet(controller)
-            Sheet.CATALOG -> CatalogSheet(controller)
+            Sheet.GOALS -> GoalsSheet(controller)
+            Sheet.SHOP -> ShopSheet(controller, clock)
             Sheet.BIG_BANG -> BigBangSheet(controller)
             Sheet.NONE -> Unit
         }
 
-        controller.offlineReport?.let { OfflineDialog(it, controller::dismissOfflineReport) }
+        val offline = controller.offlineReport
+        val login = state.pendingLoginReward
+        when {
+            offline != null -> OfflineDialog(offline, controller::dismissOfflineReport)
+            // Die Tagesbelohnung begrüßt den Spieler, sobald kein anderer Dialog offen ist.
+            login != null && state.lawChoices.isEmpty() -> LoginRewardDialog(state.loginStreak, login) {
+                controller.claimLoginReward()
+            }
+        }
+        controller.capsuleReveal?.let { reveal ->
+            CapsuleRevealOverlay(
+                reveal, clock, controller::dismissCapsuleReveal,
+                onOpenAnother = if (state.capsules > 0) controller::openCapsule else null,
+            )
+        }
 
         if (state.lawChoices.isNotEmpty()) GalaxySelectScreen(controller, clock)
     }
+}
+
+/** Partikelfarbe je nach gekauftem Funken-Stil. */
+private fun sparkTint(style: SparkStyle, base: Color): Color = when (style) {
+    SparkStyle.CLASSIC -> base
+    SparkStyle.RAINBOW -> sparkPreviewColor(style, Random.nextInt(9))
+    else -> lerp(base, sparkPreviewColor(style, 0), 0.75f)
 }
 
 /** Sanfter, ständiger Staubfluss aus allen Sternen und in Schwarze Löcher. */

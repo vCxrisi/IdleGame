@@ -19,4 +19,7 @@ enum class ConstellationKind(
     CROWN("Krone", "Ein Stern, vollständig von sechs Sternen umringt.", 0.30, 45f),
     SUN_CROWN("Sonnenkrone", "Eine Krone mit einem Gelben Stern im Herzen.", 0.60, 52f),
     EVENT_HORIZON("Ereignishorizont", "Ein Schwarzes Loch, vollständig von Sternen umringt.", 1.00, 280f),
+    LADDER("Himmelsleiter", "Fünf Sterne in einer geraden Linie.", 0.40, 230f),
+    KILONOVA("Kilonova-Paar", "Zwei Neutronensterne, die sich berühren.", 0.80, 185f),
+    QUASAR_THRONE("Quasar-Thron", "Ein Quasar, vollständig von Sternen umringt.", 1.50, 330f),
 }

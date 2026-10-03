@@ -3,6 +3,7 @@ package de.vcxrisi.sternengarten.ui.hud
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 import de.vcxrisi.sternengarten.game.engine.Balance
 import de.vcxrisi.sternengarten.game.engine.BoardAnalysis
 import de.vcxrisi.sternengarten.game.engine.StarBreakdown
-import de.vcxrisi.sternengarten.game.model.ConstellationKind
+import de.vcxrisi.sternengarten.game.model.Achievement
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.LifePhase
@@ -56,7 +56,7 @@ fun displayedRate(state: GameState, analysis: BoardAnalysis): Double =
     analysis.totalRate * state.law.onlineMult * (if (state.boostRemaining > 0) Balance.COMET_BOOST_MULT else 1.0)
 
 @Composable
-fun TopBar(state: GameState, analysis: BoardAnalysis, modifier: Modifier = Modifier) {
+fun TopBar(state: GameState, analysis: BoardAnalysis, onCrystals: () -> Unit, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Top) {
         GlassPanel(padding = PaddingValues(horizontal = 16.dp, vertical = 10.dp), tint = Palette.Stardust.copy(alpha = 0.4f)) {
             Column {
@@ -83,6 +83,7 @@ fun TopBar(state: GameState, analysis: BoardAnalysis, modifier: Modifier = Modif
                     Txt(state.law.displayName, Type.Small, color = Color.hsv(state.law.hue, 0.45f, 1f), maxLines = 1)
                 }
             }
+            CurrencyChip(formatNumber(state.crystals.toDouble()), "Kristalle", Palette.Crystal, crystal = true, onClick = onCrystals)
             if (state.elements > 0 || state.supernovaCount > 0 || StarType.BLUE_GIANT in state.unlocked) {
                 CurrencyChip(formatNumber(state.elements), "Elemente", Palette.Elements)
             }
@@ -154,15 +155,35 @@ fun BuildBar(controller: GameController, time: Float, modifier: Modifier = Modif
     }
 }
 
+/** Anzahl abholbarer Belohnungen: Missionen, Galaxie-Ziele und Login-Bonus. */
+fun claimableCount(controller: GameController): Int {
+    val state = controller.state
+    val missions = state.missions.count { !it.claimed && controller.progression.missionProgress(state, it) >= it.target }
+    val goals = state.galaxyGoals.count { !it.claimed && controller.progression.goalProgress(state, controller.analysis, it) >= it.target }
+    return missions + goals + (if (state.pendingLoginReward != null) 1 else 0)
+}
+
 @Composable
 fun ActionBar(controller: GameController, modifier: Modifier = Modifier) {
     val state = controller.state
     val gain = Balance.darkMatterGain(state)
-    Row(modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        GlowButton("Forschung", { controller.sheet = Sheet.RESEARCH }, Modifier.weight(1f), color = Palette.Elements, compact = true)
+    val claimable = claimableCount(controller)
+    Row(modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        GlowButton("Forschung", { controller.sheet = Sheet.RESEARCH }, Modifier.weight(1.2f), color = Palette.Elements, compact = true)
+        Box(Modifier.weight(1f)) {
+            GlowButton(
+                "Ziele", { controller.sheet = Sheet.GOALS }, Modifier.fillMaxWidth(),
+                color = Palette.Accent, compact = true, subtitle = "${state.achievements.size}/${Achievement.entries.size}",
+            )
+            if (claimable > 0) Badge(claimable, Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp))
+        }
         GlowButton(
-            "Sternbilder", { controller.sheet = Sheet.CATALOG }, Modifier.weight(1f),
-            color = Palette.Accent, compact = true, subtitle = "${state.discovered.size}/${ConstellationKind.entries.size}",
+            "Shop", { controller.sheet = Sheet.SHOP }, Modifier.weight(1f),
+            color = Palette.Crystal, compact = true, subtitle = when (state.capsules) {
+                0 -> null
+                1 -> "1 Kapsel"
+                else -> "${state.capsules} Kapseln"
+            },
         )
         GlowButton(
             "Urknall", { controller.sheet = Sheet.BIG_BANG }, Modifier.weight(1f),
@@ -187,7 +208,8 @@ fun StarInfoPanel(controller: GameController, hex: Hex, time: Float, modifier: M
                 Column(Modifier.weight(1f)) {
                     Txt(star.type.displayName, Type.Title)
                     Txt(
-                        if (star.type == StarType.BLACK_HOLE) "Stufe —" else "${phase.displayName} · Stufe ${star.level}",
+                        if (star.type == StarType.BLACK_HOLE || star.type == StarType.NEBULA_NURSERY) phase.displayName
+                        else "${phase.displayName} · Stufe ${star.level}",
                         Type.Small,
                     )
                 }
@@ -197,15 +219,19 @@ fun StarInfoPanel(controller: GameController, hex: Hex, time: Float, modifier: M
             if (star.type == StarType.BLACK_HOLE) {
                 val inflow = controller.analysis.blackHoleInflow[hex] ?: 0.0
                 Txt("Sog: ${formatNumber(inflow * state.law.onlineMult)}/s · gespeichert: ${formatNumber(star.stored)}", Type.Label, color = Palette.Boost)
-                Txt("Freisetzen bringt das Dreifache: ${formatNumber(star.stored * Balance.BLACK_HOLE_RELEASE_MULT)}", Type.Body)
+                val mult = Balance.blackHoleReleaseMultiplier(state)
+                Txt("Freisetzen bringt ×${formatDecimal(mult, 1)}: ${formatNumber(star.stored * mult)}", Type.Body)
             } else if (breakdown != null) {
                 Txt("+${formatNumber(breakdown.rate * state.law.onlineMult)} Sternenstaub/s", Type.Label, color = Palette.Stardust)
                 BonusChips(breakdown)
             }
 
             val lifespan = Balance.effectiveLifespan(state, star.type)
-            if (lifespan != null && !star.whiteDwarf) {
-                val remaining = (lifespan - star.age) / state.law.agingMult
+            val sheltered = controller.isSheltered(hex)
+            if (lifespan != null && !star.whiteDwarf && sheltered) {
+                Txt("Von einer Nebelwiege behütet – altert nicht.", Type.Small, color = starColors(StarType.NEBULA_NURSERY).glow)
+            } else if (lifespan != null && !star.whiteDwarf) {
+                val remaining = (lifespan - star.age) / Balance.agingMultiplier(state)
                 val label = when (star.type.fate) {
                     StarFate.SUPERNOVA -> "Supernova in ${formatDuration(remaining)}"
                     StarFate.WHITE_DWARF -> "Weißer Zwerg in ${formatDuration(remaining)}"
@@ -216,7 +242,9 @@ fun StarInfoPanel(controller: GameController, hex: Hex, time: Float, modifier: M
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (star.type == StarType.BLACK_HOLE) {
+                if (star.type == StarType.NEBULA_NURSERY) {
+                    Txt("Nebelwiegen lassen sich nicht verbessern.", Type.Small, modifier = Modifier.weight(1f))
+                } else if (star.type == StarType.BLACK_HOLE) {
                     GlowButton(
                         "Freisetzen", { controller.releaseBlackHole(hex) }, Modifier.weight(1f),
                         color = Palette.Boost, enabled = star.stored > 0,
@@ -238,6 +266,7 @@ fun StarInfoPanel(controller: GameController, hex: Hex, time: Float, modifier: M
 private fun BonusChips(b: StarBreakdown) {
     val chips = buildList {
         if (b.phase != 1.0) add("Lebensphase ×${formatDecimal(b.phase, 1)}" to Palette.TextDim)
+        if (b.levelBonus > 0) add("Neutronendruck +${b.levelBonus} Stufen" to Color(0xFF9FE7FF))
         if (b.aura > 0) add("Nachbarn ${formatPercent(b.aura)}" to Palette.Stardust)
         if (b.crowding < 1.0) add("Enge −${formatDecimal((1 - b.crowding) * 100, 0)} %" to Palette.Danger)
         if (b.pair > 1.0) add("Paar ×2" to Color(0xFFC08BFF))

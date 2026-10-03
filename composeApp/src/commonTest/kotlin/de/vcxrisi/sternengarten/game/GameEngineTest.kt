@@ -152,10 +152,14 @@ class GameEngineTest {
 
     @Test
     fun constellationBonusDoesNotStackForSameKind() {
-        // Fünf in einer Linie: der mittlere Stern liegt in drei Dreigestirnen, bekommt den Bonus aber nur einmal.
+        // Fünf in einer Linie: der mittlere Stern liegt in drei Dreigestirnen und zwei Roten Fäden,
+        // bekommt jeden Bonus aber nur einmal (plus die Himmelsleiter).
         val state = GameState(stars = (0 until 5).associate { Hex(it, 0) to adult(StarType.RED_DWARF) })
         val middle = BoardAnalyzer.analyze(state).breakdown.getValue(Hex(2, 0))
-        assertClose(ConstellationKind.TRIO.memberBonus + ConstellationKind.RED_THREAD.memberBonus, middle.constellation)
+        assertClose(
+            ConstellationKind.TRIO.memberBonus + ConstellationKind.RED_THREAD.memberBonus + ConstellationKind.LADDER.memberBonus,
+            middle.constellation,
+        )
     }
 
     @Test

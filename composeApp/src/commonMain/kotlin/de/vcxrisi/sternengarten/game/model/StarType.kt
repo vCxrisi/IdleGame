@@ -43,10 +43,34 @@ enum class StarType(
         baseCost = 500_000.0, costGrowth = 1.3, baseOutput = 2_500.0,
         lifespan = null, fate = StarFate.ETERNAL,
     ),
+    NEUTRON_STAR(
+        "Neutronenstern",
+        "Ultradicht: Jeder angrenzende Stern leistet, als wäre er 5 Stufen höher.",
+        baseCost = 2_500_000.0, costGrowth = 1.35, baseOutput = 6_000.0,
+        lifespan = null, fate = StarFate.ETERNAL,
+    ),
     BLACK_HOLE(
         "Schwarzes Loch",
         "Verschlingt die Hälfte der Produktion seiner Nachbarn. Antippen setzt das Dreifache frei.",
         baseCost = 8_000_000.0, costGrowth = 1.5, baseOutput = 0.0,
+        lifespan = null, fate = StarFate.ETERNAL,
+    ),
+    MAGNETAR(
+        "Magnetar",
+        "Feldlinien: +60 % für jeden Stern im Abstand von genau zwei Feldern. Direkte Nachbarn gehen leer aus.",
+        baseCost = 60_000_000.0, costGrowth = 1.4, baseOutput = 90_000.0,
+        lifespan = null, fate = StarFate.ETERNAL,
+    ),
+    NEBULA_NURSERY(
+        "Nebelwiege",
+        "Produziert selbst nichts. Angrenzende Sterne altern nicht mehr und erhalten +20 %.",
+        baseCost = 250_000_000.0, costGrowth = 1.6, baseOutput = 0.0,
+        lifespan = null, fate = StarFate.ETERNAL,
+    ),
+    QUASAR(
+        "Quasar",
+        "Leuchtet über die ganze Galaxie: +3 % Produktion für alle Sterne je Stern im Garten.",
+        baseCost = 1_500_000_000.0, costGrowth = 1.8, baseOutput = 2_000_000.0,
         lifespan = null, fate = StarFate.ETERNAL,
     );
 

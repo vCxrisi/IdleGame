@@ -36,6 +36,9 @@ class ParticleSystem(private val capacity: Int = 900) {
 
     val isEmpty: Boolean get() = count == 0 && rings.isEmpty()
 
+    /** Optionale Umfärbung jedes neuen Partikels (Funken-Stil aus dem Shop). */
+    var palette: ((Color) -> Color)? = null
+
     fun emit(
         at: Offset,
         velocity: Offset,
@@ -53,7 +56,7 @@ class ParticleSystem(private val capacity: Int = 900) {
         radius[i] = size
         drag[i] = friction
         gravityX[i] = pull.x; gravityY[i] = pull.y
-        color[i] = tint
+        color[i] = palette?.invoke(tint) ?: tint
     }
 
     /** Explosion in alle Richtungen. */

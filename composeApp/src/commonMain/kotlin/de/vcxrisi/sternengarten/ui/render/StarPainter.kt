@@ -43,6 +43,8 @@ private const val TAU = (2 * PI).toFloat()
 fun DrawScope.drawStar(center: Offset, unit: Float, visual: StarVisual, time: Float, seed: Float = 0f) {
     when {
         visual.type == StarType.BLACK_HOLE -> drawBlackHole(center, unit, visual, time, seed)
+        visual.type == StarType.NEBULA_NURSERY -> drawNursery(center, unit, visual, time, seed)
+        visual.type == StarType.QUASAR -> drawQuasar(center, unit, visual, time, seed)
         visual.type == StarType.BINARY && visual.phase != LifePhase.WHITE_DWARF -> drawBinary(center, unit, visual, time, seed)
         else -> drawSingleStar(center, unit, visual, time, seed)
     }
@@ -65,6 +67,10 @@ private fun sizeFor(visual: StarVisual): Float {
         StarType.BINARY -> 0.24f
         StarType.PULSAR -> 0.22f
         StarType.BLACK_HOLE -> 0.34f
+        StarType.NEUTRON_STAR -> 0.15f
+        StarType.MAGNETAR -> 0.24f
+        StarType.NEBULA_NURSERY -> 0.30f
+        StarType.QUASAR -> 0.26f
     }
     val levelBoost = 1f + min(0.25f, (visual.level - 1) * 0.01f)
     val phase = when (visual.phase) {
@@ -123,6 +129,8 @@ private fun DrawScope.drawSingleStar(center: Offset, unit: Float, visual: StarVi
 
     // Pulsar: rotierende Leuchtkegel
     if (visual.type == StarType.PULSAR) drawPulsarBeams(center, r, colors.glow, time, seed)
+    if (visual.type == StarType.NEUTRON_STAR) drawNeutronShell(center, r, colors.glow, time, seed)
+    if (visual.type == StarType.MAGNETAR) drawFieldLines(center, r, colors, time, seed)
 
     // Heißer Kern
     drawCircle(
@@ -162,6 +170,79 @@ private fun DrawScope.drawPulsarBeams(center: Offset, r: Float, color: Color, ti
             blendMode = BlendMode.Plus,
         )
     }
+}
+
+/** Neutronenstern: winziger, gleißender Kern mit schnell pulsierender Hülle. */
+private fun DrawScope.drawNeutronShell(center: Offset, r: Float, color: Color, time: Float, seed: Float) {
+    val beat = (time * 3.2f + seed) % 1f
+    drawCircle(color.copy(alpha = 0.7f * (1f - beat)), r * (1.4f + 2.2f * beat), center, style = Stroke(width = r * 0.18f), blendMode = BlendMode.Plus)
+    drawGlow(center, r * 2.2f, Color.White, 0.9f)
+}
+
+/** Magnetar: geschwungene Feldlinien, die langsam rotieren. */
+private fun DrawScope.drawFieldLines(center: Offset, r: Float, colors: StarColors, time: Float, seed: Float) {
+    rotate(time * 12f + seed * 60f, center) {
+        for (k in 0 until 3) {
+            val w = r * (3.2f + k * 1.1f)
+            val h = r * (1.3f + k * 0.35f)
+            val color = if (k % 2 == 0) colors.glow else colors.secondary
+            for (side in listOf(-1f, 1f)) {
+                drawOval(
+                    color = color.copy(alpha = 0.45f - k * 0.1f),
+                    topLeft = Offset(center.x + (if (side < 0) -w else 0f), center.y - h / 2f),
+                    size = Size(w, h),
+                    style = Stroke(width = r * 0.09f),
+                    blendMode = BlendMode.Plus,
+                )
+            }
+        }
+    }
+}
+
+/** Nebelwiege: wogende Gaswolke mit kleinen, glitzernden Protosternen. */
+private fun DrawScope.drawNursery(center: Offset, unit: Float, visual: StarVisual, time: Float, seed: Float) {
+    val colors = starColors(StarType.NEBULA_NURSERY)
+    val r = unit * sizeFor(visual)
+    for (k in 0 until 5) {
+        val a = time * 0.4f + k * 1.26f + seed * 6f
+        val c = Offset(center.x + cos(a) * r * 0.55f, center.y + sin(a * 1.3f) * r * 0.45f)
+        drawGlow(c, r * (1.3f + 0.25f * sin(time + k)), if (k % 2 == 0) colors.glow else colors.secondary, 0.45f)
+    }
+    for (k in 0 until 4) {
+        val a = -time * 0.9f + k * 1.57f + seed
+        val c = Offset(center.x + cos(a) * r * 0.75f, center.y + sin(a) * r * 0.5f)
+        val twinkle = 0.5f + 0.5f * sin(time * 5f + k * 2f)
+        drawGlow(c, r * 0.35f, Color.White, 0.9f * twinkle)
+    }
+}
+
+/** Quasar: gleißende Scheibe mit zwei relativistischen Jets. */
+private fun DrawScope.drawQuasar(center: Offset, unit: Float, visual: StarVisual, time: Float, seed: Float) {
+    val colors = starColors(StarType.QUASAR)
+    val r = unit * sizeFor(visual) * (1f + 0.05f * sin(time * 2f + seed))
+    drawGlow(center, r * 4.5f, colors.glow, 0.45f)
+    val jet = r * 6.5f
+    for (dir in listOf(-1f, 1f)) {
+        val end = Offset(center.x, center.y + dir * jet)
+        drawLine(
+            Brush.linearGradient(listOf(colors.secondary.copy(alpha = 0.9f), Color.Transparent), center, end),
+            center, end, strokeWidth = r * 0.35f, blendMode = BlendMode.Plus,
+        )
+        val knot = (time * 0.8f + seed + (if (dir > 0) 0.5f else 0f)) % 1f
+        drawGlow(Offset(center.x, center.y + dir * jet * knot), r * 0.6f, colors.secondary, 0.8f * (1f - knot))
+    }
+    scale(1f, 0.32f, center) {
+        rotate(time * 90f, center) {
+            drawCircle(
+                brush = Brush.sweepGradient(listOf(colors.glow, Color.White, colors.secondary, colors.glow), center),
+                radius = r * 1.6f, center = center, style = Stroke(width = r * 0.7f), blendMode = BlendMode.Plus,
+            )
+        }
+    }
+    drawCircle(
+        brush = Brush.radialGradient(0f to Color.White, 0.6f to colors.core, 1f to colors.glow.copy(alpha = 0f), center = center, radius = r),
+        radius = r, center = center,
+    )
 }
 
 private fun DrawScope.drawBinary(center: Offset, unit: Float, visual: StarVisual, time: Float, seed: Float) {
