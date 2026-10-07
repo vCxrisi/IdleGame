@@ -86,9 +86,20 @@ Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur
 4. Die App aus dem Test-Track installieren. Käufe funktionieren nur mit einer über Play installierten App.
 
 **App Store Connect**
-1. App mit der Bundle-ID `de.vcxrisi.sternengarten` anlegen und deine Team-ID in `iosApp/Configuration/Config.xcconfig` eintragen.
+1. App mit der Bundle-ID `de.vcxrisi.sternengarten` anlegen (Name in App Store Connect: „Sternengarten: Idle“).
 2. Unter *In-App-Käufe* die vier Kristall-Pakete als **Verbrauchsartikel** anlegen, Starterpaket und Sternenwanderer als **Nicht-Verbrauchsartikel**.
 3. Lokal testen: In Xcode über *File → New → File → StoreKit Configuration File* (mit „Sync with App Store Connect“) eine Testkonfiguration erzeugen und im Scheme unter *Run → Options → StoreKit Configuration* auswählen. Alternativ in TestFlight mit Sandbox-Konten testen.
+
+## iOS-Build mit Codemagic (TestFlight)
+
+`codemagic.yaml` enthält den Workflow **iOS TestFlight**. Er baut die App in der Cloud auf einem Mac, signiert sie und lädt sie zu App Store Connect hoch. Danach steht der Build internen Testern in TestFlight zur Verfügung. Ein eigener Mac ist dafür nicht nötig.
+
+- **Signieren:** Die App wird mit `app-store-connect fetch-signing-files --create` signiert. Distribution-Zertifikat und App-Store-Profil legt Codemagic beim ersten Build selbst an.
+- **Was in Codemagic hinterlegt sein muss:**
+  - ein App-Store-Connect-API-Schlüssel mit dem Namen **`codemagic`**
+  - die Variablen-Gruppe **`code-signing`** mit dem Secret `CERTIFICATE_PRIVATE_KEY`
+- **Build-Nummer:** Die Codemagic-Variable `$BUILD_NUMBER` wird als `CURRENT_PROJECT_VERSION` eingetragen. Die Version (`MARKETING_VERSION`) steht in `iosApp/Configuration/Config.xcconfig`.
+- **Komplette Klick-Anleitung** für Apple Developer, App Store Connect und Codemagic: [`docs/TESTFLIGHT.md`](docs/TESTFLIGHT.md). Sie ist auch als Auftrag für eine Claude-Sitzung mit Chrome-Erweiterung geschrieben.
 
 ## Projekt öffnen und starten
 
@@ -103,6 +114,7 @@ Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur
 3. **iOS** (nur auf dem Mac):
    - Entweder die iOS-Run-Konfiguration des KMP-Plugins in Android Studio verwenden.
    - Oder `iosApp/iosApp.xcodeproj` in Xcode öffnen und starten. Die Build-Phase ruft automatisch `./gradlew :composeApp:embedAndSignAppleFrameworkForXcode` auf.
+   - Für ein echtes Gerät deine Team-ID in `iosApp/Configuration/Config.xcconfig` eintragen. Die Bundle-ID ändert sich dadurch nicht.
 4. **Desktop** mit Test-Store: `./gradlew :composeApp:run`
 5. **Tests der Spiellogik:** `./gradlew :composeApp:desktopTest`
 
@@ -128,7 +140,9 @@ composeApp/src/
   androidMain/     MainActivity, PlayStoreGateway, Manifest, adaptives App-Icon
   iosMain/         MainViewController für SwiftUI
   desktopMain/     Desktop-Fenster mit Test-Store
-iosApp/            Xcode-Projekt (SwiftUI-Hülle, AppStoreGateway mit StoreKit 2)
+iosApp/            Xcode-Projekt (SwiftUI-Hülle, AppStoreGateway mit StoreKit 2, geteiltes Scheme, Privacy-Manifest)
+codemagic.yaml     CI-Workflow für TestFlight
+docs/TESTFLIGHT.md Einrichtung von Apple Developer, App Store Connect und Codemagic
 ```
 
 Die Spiellogik ist unabhängig von der Oberfläche. Der Spielstand ist unveränderlich, und die Engine arbeitet mit reinen Funktionen. Die Simulation läuft in festen Schritten von 0,1 s. Die Animationen laufen mit der vollen Bildrate.

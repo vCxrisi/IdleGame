@@ -1,0 +1,87 @@
+# Codemagic: baut die iOS-App und lädt sie zu App Store Connect / TestFlight hoch.
+# Einrichtung Schritt für Schritt: docs/TESTFLIGHT.md
+#
+# Voraussetzungen in Codemagic:
+#   - App Store Connect API-Schlüssel unter Integrationen → Developer Portal mit dem Namen "codemagic"
+#   - Umgebungsvariablen-Gruppe "code-signing" mit dem Secret CERTIFICATE_PRIVATE_KEY
+#     (RSA-Schlüssel für das Distribution-Zertifikat, siehe docs/TESTFLIGHT.md)
+workflows:
+  ios-testflight:
+    name: iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      groups:
+        - code-signing
+      vars:
+        BUNDLE_ID: "de.vcxrisi.sternengarten"
+        XCODE_PROJECT: "iosApp.xcodeproj"
+        XCODE_SCHEME: "iosApp"
+      # Kotlin/Native 2.4.20 ist gegen Xcode 26.4 gebaut. Falls diese Version nicht angeboten wird:
+      # auf eine andere 26.x-Version oder "latest" ändern.
+      xcode: "26.4"
+      java: 17
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+        - ~/.konan
+    scripts:
+      - name: Werkzeuge anzeigen
+        script: |
+          java -version
+          xcodebuild -version
+      - name: Android-SDK für Gradle bekannt machen
+        script: |
+          # Das Android-Gradle-Plugin braucht beim Konfigurieren ein SDK, auch wenn nur iOS gebaut wird.
+          SDK_DIR="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          if [ -n "$SDK_DIR" ]; then
+            echo "sdk.dir=$SDK_DIR" > "$CM_BUILD_DIR/local.properties"
+            echo "Android-SDK: $SDK_DIR"
+          else
+            echo "Kein Android-SDK gefunden (ANDROID_SDK_ROOT/ANDROID_HOME leer)."
+          fi
+      - name: Signing-Dateien holen (fehlendes Zertifikat/Profil wird angelegt)
+        script: |
+          set -e
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --strict-match-identifier \
+            --create
+          keychain add-certificates
+      - name: Xcode-Projekt auf die Profile umstellen
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/iosApp"
+          xcode-project use-profiles
+      - name: Build-Nummer setzen
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/iosApp"
+          sed -i '' -E "s/^CURRENT_PROJECT_VERSION=.*/CURRENT_PROJECT_VERSION=$BUILD_NUMBER/" Configuration/Config.xcconfig
+          grep -q "^CURRENT_PROJECT_VERSION=$BUILD_NUMBER\$" Configuration/Config.xcconfig
+          grep '^CURRENT_PROJECT_VERSION=' Configuration/Config.xcconfig
+      - name: Kotlin-Framework bauen
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR"
+          # Eigener Schritt, damit Kotlin-Fehler lesbar im Log stehen; Xcode findet das Framework danach aktuell vor.
+          ./gradlew :composeApp:linkReleaseFrameworkIosArm64
+      - name: IPA bauen
+        script: |
+          set -e
+          cd "$CM_BUILD_DIR/iosApp"
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - iosApp/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Nur hochladen: Interne Tester sehen den Build ohne Beta-Review.
+        # true würde den Build zusätzlich zur Beta-Prüfung einreichen.
+        submit_to_testflight: false
