@@ -24,9 +24,10 @@ workflows:
       xcode: "26.4"
       java: 17
     cache:
+      # ~/.konan bewusst nicht cachen: Die Kotlin/Native-LLVM-Werkzeuge enthalten Symlinks,
+      # die Codemagic nicht cachen kann. Ein so beschädigter Cache würde jeden späteren Build brechen.
       cache_paths:
         - ~/.gradle/caches
-        - ~/.konan
     scripts:
       - name: Werkzeuge anzeigen
         script: |

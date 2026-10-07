@@ -82,6 +82,8 @@ ssh-keygen -t rsa -b 2048 -m PEM -f ~/ios_distribution_private_key -q -N ""
 ## 6. Codemagic: API-Schlüssel hinterlegen
 
 1. Öffne die Einstellungen von Team oder persönlichem Konto → **Integrations** → **Developer Portal** → **Connect** bzw. **Manage keys** → **Add key**.
+   - Nimm **dasselbe Konto**, dem die App in Schritt 5 hinzugefügt wurde. Persönliches Konto und Teams haben getrennte Integrationen.
+   - Ohne Team landet die App im persönlichen Konto.
 2. Gib Folgendes ein:
    - App Store Connect API key name: **`codemagic`**. Er muss exakt so heißen, weil `codemagic.yaml` ihn so referenziert.
    - Issuer ID und Key ID aus Schritt 3.
@@ -102,7 +104,9 @@ ssh-keygen -t rsa -b 2048 -m PEM -f ~/ios_distribution_private_key -q -N ""
 
 1. Klicke in der App auf **Start new build**.
 2. Branch: `claude/confident-tesla-4tzdfl`, Workflow: **iOS TestFlight** → **Start new build**.
-3. Rechne mit 25–40 Minuten für den ersten Lauf. Er lädt einmalig die Kotlin/Native-Werkzeuge herunter, danach liegen sie im Cache.
+3. Rechne mit 25–40 Minuten für den ersten Lauf.
+   - Spätere Läufe sind etwas schneller, weil die Gradle-Abhängigkeiten im Cache liegen.
+   - Die Kotlin/Native-Werkzeuge werden jedes Mal neu geladen.
 4. Danach zeigt App Store Connect → TestFlight den Build als „Wird verarbeitet“. Das dauert 5–30 Minuten.
 
 ## 9. Auf dem iPhone testen
