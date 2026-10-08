@@ -9,7 +9,7 @@ Diese Anleitung ist so geschrieben, dass eine **Claude-Sitzung auf deinem Comput
 | Name in App Store Connect | **Sternengarten: Idle** (auf dem Gerät heißt die App „Sternengarten“) |
 | SKU | `sternengarten-ios` |
 | Codemagic-Workflow | `ios-testflight` („iOS TestFlight“) aus `codemagic.yaml` |
-| Name des API-Schlüssels in Codemagic | genau **`codemagic`** |
+| Name des API-Schlüssels in Codemagic | genau **`Codemagic`** (großes C) |
 | Variablen-Gruppe in Codemagic | **`code-signing`** mit dem Secret `CERTIFICATE_PRIVATE_KEY` |
 
 ## Regeln für die ausführende Claude-Sitzung
@@ -85,7 +85,7 @@ ssh-keygen -t rsa -b 2048 -m PEM -f ~/ios_distribution_private_key -q -N ""
    - Nimm **dasselbe Konto**, dem die App in Schritt 5 hinzugefügt wurde. Persönliches Konto und Teams haben getrennte Integrationen.
    - Ohne Team landet die App im persönlichen Konto.
 2. Gib Folgendes ein:
-   - App Store Connect API key name: **`codemagic`**. Er muss exakt so heißen, weil `codemagic.yaml` ihn so referenziert.
+   - App Store Connect API key name: **`Codemagic`** mit großem C. Er muss exakt so heißen, weil `codemagic.yaml` ihn so referenziert.
    - Issuer ID und Key ID aus Schritt 3.
    - **Mensch:** die `.p8`-Datei hochladen.
 3. Klicke auf **Save**.
@@ -133,7 +133,7 @@ Schicke den Log-Ausschnitt des fehlgeschlagenen Schritts oder das Artefakt `xcod
 Falls Schritt 4 nicht möglich ist, sind statt des automatischen Signierens vier Handgriffe nötig. Die Cloud-Sitzung passt dafür `codemagic.yaml` an: `ios_signing` statt `fetch-signing-files`.
 
 1. In Codemagic: Team settings → codemagic.yaml settings → **Code signing identities** → iOS certificates.
-   - **Generate certificate** mit Typ Apple Distribution und Schlüssel `codemagic`.
+   - **Generate certificate** mit Typ Apple Distribution und Schlüssel `Codemagic`.
    - Die `.p12` einmalig herunterladen und das Passwort notieren.
    - Danach im Reiter **Upload certificate** wieder hochladen und einen Referenznamen vergeben.
 2. Im Apple-Developer-Portal: Profiles → „+“ → **App Store Connect**.

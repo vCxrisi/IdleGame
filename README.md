@@ -96,7 +96,7 @@ Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur
 
 - **Signieren:** Die App wird mit `app-store-connect fetch-signing-files --create` signiert. Distribution-Zertifikat und App-Store-Profil legt Codemagic beim ersten Build selbst an.
 - **Was in Codemagic hinterlegt sein muss:**
-  - ein App-Store-Connect-API-Schlüssel mit dem Namen **`codemagic`**
+  - ein App-Store-Connect-API-Schlüssel mit dem Namen **`Codemagic`** (großes C)
   - die Variablen-Gruppe **`code-signing`** mit dem Secret `CERTIFICATE_PRIVATE_KEY`
 - **Build-Nummer:** Die Codemagic-Variable `$BUILD_NUMBER` wird als `CURRENT_PROJECT_VERSION` eingetragen. Die Version (`MARKETING_VERSION`) steht in `iosApp/Configuration/Config.xcconfig`.
 - **Komplette Klick-Anleitung** für Apple Developer, App Store Connect und Codemagic: [`docs/TESTFLIGHT.md`](docs/TESTFLIGHT.md). Sie ist auch als Auftrag für eine Claude-Sitzung mit Chrome-Erweiterung geschrieben.

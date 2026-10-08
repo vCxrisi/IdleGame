@@ -2,7 +2,7 @@
 # Einrichtung Schritt für Schritt: docs/TESTFLIGHT.md
 #
 # Voraussetzungen in Codemagic:
-#   - App Store Connect API-Schlüssel unter Integrationen → Developer Portal mit dem Namen "codemagic"
+#   - App Store Connect API-Schlüssel unter Integrationen → Developer Portal mit dem Namen "Codemagic"
 #   - Umgebungsvariablen-Gruppe "code-signing" mit dem Secret CERTIFICATE_PRIVATE_KEY
 #     (RSA-Schlüssel für das Distribution-Zertifikat, siehe docs/TESTFLIGHT.md)
 workflows:
@@ -11,7 +11,7 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 120
     integrations:
-      app_store_connect: codemagic
+      app_store_connect: Codemagic
     environment:
       groups:
         - code-signing
