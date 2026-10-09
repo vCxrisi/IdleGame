@@ -104,8 +104,11 @@ object BoardAnalyzer {
                 (star.type == StarType.YELLOW_STAR || star.type == StarType.BLUE_GIANT)
             ) Balance.SOLAR_STORM_MULT else 1.0
 
-            val rate = base * phase * (1.0 + aura) * crowding * pair * (1.0 + enrichment) * (1.0 + constellation) *
-                storm * quasarMult * global
+            // Sofort begrenzen: Ein unendlicher Wert würde beim Abzug durch Schwarze Löcher zu NaN (∞ − ∞).
+            val rate = (
+                base * phase * (1.0 + aura) * crowding * pair * (1.0 + enrichment) * (1.0 + constellation) *
+                    storm * quasarMult * global
+                ).capped()
             raw[hex] = StarBreakdown(base, phase, aura, crowding, pair, enrichment, constellation, 0.0, rate, levelBonus)
         }
 
@@ -131,16 +134,16 @@ object BoardAnalyzer {
         val tide = if (event == CosmicEvent.DARK_TIDE) Balance.DARK_TIDE_MULT else 1.0
         for ((h, amount) in inflow.entries.toList()) {
             val bonus = raw[h]?.constellation ?: 0.0
-            inflow[h] = amount * (1.0 + bonus) * tide
+            inflow[h] = (amount * (1.0 + bonus) * tide).capped()
         }
 
         return BoardAnalysis(
             breakdown = result,
             blackHoleInflow = inflow,
-            totalRate = result.values.sumOf { it.rate },
+            totalRate = result.values.sumOf { it.rate }.capped(),
             constellations = constellations,
             activeKinds = constellations.mapTo(mutableSetOf()) { it.kind },
-            globalMultiplier = global * quasarMult,
+            globalMultiplier = (global * quasarMult).capped(),
         )
     }
 

@@ -48,6 +48,7 @@ import de.vcxrisi.sternengarten.ui.hud.GalaxySelectScreen
 import de.vcxrisi.sternengarten.ui.hud.GoalsSheet
 import de.vcxrisi.sternengarten.ui.hud.LoginRewardDialog
 import de.vcxrisi.sternengarten.ui.hud.OfflineDialog
+import de.vcxrisi.sternengarten.ui.hud.RepairDialog
 import de.vcxrisi.sternengarten.ui.hud.ResearchSheet
 import de.vcxrisi.sternengarten.ui.hud.ShopSheet
 import de.vcxrisi.sternengarten.ui.hud.StarInfoPanel
@@ -226,7 +227,9 @@ fun GameScreen(controller: GameController) {
 
         val offline = controller.offlineReport
         val login = state.pendingLoginReward
+        val repair = controller.repairNotice
         when {
+            repair != null -> RepairDialog(repair, controller::dismissRepairNotice)
             offline != null -> OfflineDialog(offline, controller::dismissOfflineReport)
             // Die Tagesbelohnung begrüßt den Spieler, sobald kein anderer Dialog offen ist.
             login != null && state.lawChoices.isEmpty() -> LoginRewardDialog(state.loginStreak, login) {

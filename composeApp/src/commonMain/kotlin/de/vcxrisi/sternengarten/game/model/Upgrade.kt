@@ -38,7 +38,7 @@ enum class Upgrade(
     ),
     DARK_ENERGY(
         "Dunkle Energie", "×2 Produktion – in jeder Galaxie.",
-        Currency.DARK_MATTER, 1.0, 3.0, permanent = true,
+        Currency.DARK_MATTER, 1.0, 10.0, permanent = true,
     ),
     STARDUST_MEMORY(
         "Sternengedächtnis", "Jede neue Galaxie startet mit mehr Sternenstaub.",

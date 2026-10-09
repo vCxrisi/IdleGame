@@ -144,7 +144,7 @@ private fun UpgradeRow(controller: GameController, upgrade: Upgrade) {
 fun BoxScope.BigBangSheet(controller: GameController) {
     val state = controller.state
     val gain = Balance.darkMatterGain(state)
-    val nextAt = ((gain + 1) / state.law.darkMatterMult).pow(2) * 1_000_000.0
+    val nextAt = Balance.runStardustForDarkMatter(state, gain + 1)
     BottomSheet("Urknall", Palette.DarkMatter, { controller.sheet = Sheet.NONE }) {
         Txt(
             "Lass diese Galaxie in sich zusammenstürzen und gebäre eine neue – mit anderen Naturgesetzen. " +

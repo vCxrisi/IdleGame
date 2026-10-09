@@ -27,10 +27,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.vcxrisi.sternengarten.game.model.ActiveEvent
 import de.vcxrisi.sternengarten.game.model.LoginReward
+import de.vcxrisi.sternengarten.game.save.RepairReport
 import de.vcxrisi.sternengarten.ui.CapsuleReveal
 import de.vcxrisi.sternengarten.ui.render.drawGlow
 import de.vcxrisi.sternengarten.ui.theme.Palette
 import de.vcxrisi.sternengarten.ui.theme.Type
+import de.vcxrisi.sternengarten.ui.theme.formatNumber
 import de.vcxrisi.sternengarten.ui.theme.rarityColor
 import kotlin.math.PI
 import kotlin.math.cos
@@ -123,6 +125,45 @@ fun EventBanner(event: ActiveEvent, modifier: Modifier = Modifier) {
             }
             Txt(event.kind.description, Type.Small, maxLines = 2)
             GlowBar((event.remaining / event.kind.duration).toFloat(), color, Modifier.fillMaxWidth().height(4.dp))
+        }
+    }
+}
+
+/** Einmaliger Hinweis, wenn ein entgleister Spielstand beim Laden repariert wurde. */
+@Composable
+fun BoxScope.RepairDialog(report: RepairReport, onDismiss: () -> Unit) {
+    Scrim(null, Modifier.fillMaxSize())
+    GlassPanel(
+        Modifier.align(Alignment.Center).widthIn(max = 420.dp).padding(20.dp),
+        strong = true,
+        tint = Palette.DarkMatter.copy(alpha = 0.7f),
+        padding = PaddingValues(20.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Txt("Spielstand repariert", Type.Title, align = TextAlign.Center)
+            Txt(
+                "Deine Galaxien sind so stark gewachsen, dass die Zahlen übergelaufen sind – Sternenstaub war nicht mehr " +
+                    "nutzbar. Das Wachstum über Urknalle ist jetzt gebremst, und dein Spielstand wurde darauf umgerechnet.",
+                Type.Body, align = TextAlign.Center,
+            )
+            Txt(
+                "Dunkle Materie: ${formatNumber(report.darkMatterBefore)} → ${formatNumber(report.darkMatterAfter)}",
+                Type.Label, color = Palette.DarkMatter, align = TextAlign.Center,
+            )
+            if (report.darkEnergyBefore != report.darkEnergyAfter) {
+                Txt(
+                    "Dunkle Energie: Stufe ${report.darkEnergyBefore} → ${report.darkEnergyAfter}",
+                    Type.Label, color = Palette.DarkMatter, align = TextAlign.Center,
+                )
+            }
+            if (report.galaxyRestarted) {
+                Txt("Die aktuelle Galaxie beginnt neu.", Type.Small, align = TextAlign.Center)
+            }
+            Txt(
+                "Kristalle, Artefakte, Erfolge, Sternbilder, Kosmetik und Käufe bleiben erhalten.",
+                Type.Small, color = Palette.Success, align = TextAlign.Center,
+            )
+            GlowButton("Weiter", onDismiss, Modifier.fillMaxWidth(), color = Palette.DarkMatter)
         }
     }
 }

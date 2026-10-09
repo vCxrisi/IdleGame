@@ -13,6 +13,7 @@ import de.vcxrisi.sternengarten.game.engine.BoardAnalyzer
 import de.vcxrisi.sternengarten.game.engine.GameEngine
 import de.vcxrisi.sternengarten.game.engine.GameEvent
 import de.vcxrisi.sternengarten.game.engine.OfflineReport
+import de.vcxrisi.sternengarten.game.engine.sanitized
 import de.vcxrisi.sternengarten.game.model.CrystalOffer
 import de.vcxrisi.sternengarten.game.model.GalaxyLaw
 import de.vcxrisi.sternengarten.game.model.GameState
@@ -22,6 +23,8 @@ import de.vcxrisi.sternengarten.game.model.SparkStyle
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
+import de.vcxrisi.sternengarten.game.save.RepairReport
+import de.vcxrisi.sternengarten.game.save.SaveMigration
 import de.vcxrisi.sternengarten.game.save.SaveRepository
 import de.vcxrisi.sternengarten.game.save.nowEpochMillis
 import de.vcxrisi.sternengarten.store.StoreGateway
@@ -50,7 +53,10 @@ class GameController(
     private val engine: GameEngine = GameEngine(),
     private val store: StoreGateway,
 ) : StoreListener {
-    var state by mutableStateOf(repository.load() ?: GameState(lastSavedEpochMs = nowEpochMillis()))
+    /** Hinweis, falls ein entgleister Spielstand beim Laden repariert wurde. */
+    var repairNotice by mutableStateOf<RepairReport?>(null)
+
+    var state by mutableStateOf(loadState())
         private set
     var analysis: BoardAnalysis by mutableStateOf(BoardAnalyzer.analyze(state))
         private set
@@ -86,8 +92,21 @@ class GameController(
     private var lastDay = -1L
     private var toastId = 0L
 
+    /** Lädt den Spielstand und bringt ihn auf den aktuellen Balancing-Stand – noch vor der Offline-Simulation. */
+    private fun loadState(): GameState {
+        val saved = repository.load()
+            ?: return GameState(lastSavedEpochMs = nowEpochMillis(), balanceVersion = SaveMigration.CURRENT_BALANCE_VERSION)
+        val (migrated, report) = SaveMigration.migrate(saved)
+        repairNotice = report
+        return migrated
+    }
+
+    fun dismissRepairNotice() {
+        repairNotice = null
+    }
+
     init {
-        catchUp(nowEpochMillis(), showReport = true)
+        catchUp(nowEpochMillis(), showReport = repairNotice == null)
         refreshDay(force = true)
     }
 
@@ -377,7 +396,7 @@ class GameController(
     /** Übernimmt einen neuen Zustand und vergibt dabei fällige Erfolge. */
     private fun update(next: GameState) {
         val events = ArrayList<GameEvent>()
-        state = engine.progression.checkAchievements(next, events)
+        state = engine.progression.checkAchievements(next, events).sanitized()
         analysis = BoardAnalyzer.analyze(state)
         events.forEach(::dispatch)
     }

@@ -73,6 +73,12 @@ data class GameState(
     val entitlements: Set<String> = emptySet(),
     /** Bereits gutgeschriebene Transaktionen – verhindert doppelte Gutschrift. */
     val processedTransactions: Set<String> = emptySet(),
+
+    /**
+     * Balancing-Stand, mit dem dieser Spielstand zuletzt geprüft wurde. Alte Spielstände ohne das Feld
+     * gelten als 0 und werden beim Laden migriert (siehe SaveMigration).
+     */
+    val balanceVersion: Int = 0,
 ) {
     fun level(upgrade: Upgrade): Int = upgrades[upgrade] ?: 0
 

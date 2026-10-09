@@ -38,7 +38,7 @@ class GameEngine(private val random: Random = Random.Default) {
         val timeMult = (if (offline) law.offlineMult else law.onlineMult) *
             (if (boostActive && !offline) Balance.COMET_BOOST_MULT else 1.0)
 
-        val income = analysis.totalRate * timeMult * dt
+        val income = (analysis.totalRate * timeMult * dt).capped()
         var elements = state.elements
         var supernovas = 0
         val enrichment = state.enrichment.toMutableMap()
@@ -52,7 +52,7 @@ class GameEngine(private val random: Random = Random.Default) {
                 val inflowRate = (analysis.blackHoleInflow[hex] ?: 0.0) * timeMult
                 if (inflowRate > 0.0) {
                     val capacity = inflowRate * Balance.BLACK_HOLE_CAPACITY_SECONDS
-                    next = next.copy(stored = min(capacity.coerceAtLeast(star.stored), star.stored + inflowRate * dt))
+                    next = next.copy(stored = min(capacity.coerceAtLeast(star.stored), star.stored + inflowRate * dt).capped())
                 }
             }
 
@@ -113,7 +113,7 @@ class GameEngine(private val random: Random = Random.Default) {
         next = unlockStarTypes(next, events)
         next = discover(next, events)
         next = progression.checkAchievements(next, events)
-        return TickResult(next, events)
+        return TickResult(next.sanitized(), events)
     }
 
     /** Neben einer Nebelwiege bleibt die Zeit stehen. */
@@ -229,7 +229,7 @@ class GameEngine(private val random: Random = Random.Default) {
 
     /** Sofortige Produktion für [seconds] Sekunden – ohne dass Sterne altern. */
     fun timeWarp(state: GameState, seconds: Double): Pair<GameState, Double> {
-        val amount = BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult * seconds
+        val amount = (BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult * seconds).capped()
         return state.copy(
             stardust = state.stardust + amount,
             runStardust = state.runStardust + amount,
@@ -293,7 +293,7 @@ class GameEngine(private val random: Random = Random.Default) {
     fun releaseBlackHole(state: GameState, hex: Hex): Pair<GameState, Double>? {
         val star = state.stars[hex] ?: return null
         if (star.type != StarType.BLACK_HOLE || star.stored <= 0.0) return null
-        val amount = star.stored * Balance.blackHoleReleaseMultiplier(state)
+        val amount = (star.stored * Balance.blackHoleReleaseMultiplier(state)).capped()
         val next = state.copy(
             stardust = state.stardust + amount,
             runStardust = state.runStardust + amount,
@@ -335,7 +335,7 @@ class GameEngine(private val random: Random = Random.Default) {
         val rate = BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult
         if (comet.meteor || random.nextBoolean()) {
             val seconds = if (comet.meteor) Balance.METEOR_REWARD_SECONDS else 120.0
-            val amount = max(25.0, rate * seconds * rewardMult)
+            val amount = max(25.0, rate * seconds * rewardMult).capped()
             return caught.copy(
                 stardust = caught.stardust + amount,
                 runStardust = caught.runStardust + amount,

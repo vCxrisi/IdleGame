@@ -8,10 +8,10 @@ import de.vcxrisi.sternengarten.game.model.Star
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
+import kotlin.math.cbrt
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.pow
-import kotlin.math.sqrt
 
 /** Alle Zahlen, an denen das Spielgefühl hängt, an einem Ort. */
 object Balance {
@@ -105,8 +105,11 @@ object Balance {
         return count
     }
 
-    /** Stufe 1 → ×1, jede Stufe linear mehr, alle 10 Stufen eine Verdopplung. */
-    fun levelMultiplier(level: Int): Double = level * 2.0.pow(level / 10)
+    /** Nach so vielen Stufen verdoppelt sich die Leistung eines Sterns zusätzlich. */
+    const val LEVEL_DOUBLING_INTERVAL = 25
+
+    /** Stufe 1 → ×1, jede Stufe linear mehr, alle [LEVEL_DOUBLING_INTERVAL] Stufen eine Verdopplung. */
+    fun levelMultiplier(level: Int): Double = (level * 2.0.pow(level / LEVEL_DOUBLING_INTERVAL)).capped()
 
     fun upgradeCost(state: GameState, upgrade: Upgrade): Double =
         upgrade.baseCost * upgrade.costGrowth.pow(state.level(upgrade))
@@ -153,7 +156,7 @@ object Balance {
     fun blackHoleReleaseMultiplier(state: GameState): Double =
         BLACK_HOLE_RELEASE_MULT + Artifact.HORIZON_SHARD.perLevel * state.artifactLevel(Artifact.HORIZON_SHARD)
 
-    fun globalMultiplier(state: GameState): Double =
+    fun globalMultiplier(state: GameState): Double = (
         (1.0 + 0.25 * state.level(Upgrade.STELLAR_WIND)) *
             1.5.pow(state.level(Upgrade.FUSION)) *
             2.0.pow(state.level(Upgrade.DARK_ENERGY)) *
@@ -163,12 +166,27 @@ object Balance {
             (1.0 + Artifact.SEXTANT.perLevel * state.artifactLevel(Artifact.SEXTANT)) *
             Artifact.PRIMORDIAL_CRYSTAL.perLevel.pow(state.artifactLevel(Artifact.PRIMORDIAL_CRYSTAL)) *
             (if (state.owns(StoreProduct.WANDERER_PASS)) PASS_PRODUCTION_MULT else 1.0)
+        ).capped()
 
+    /** Sternenstaub dieser Galaxie, ab dem der Urknall 1 Dunkle Materie bringt. */
+    const val DARK_MATTER_BASE = 1_000_000.0
+
+    /**
+     * Dunkle Materie wächst mit der Kubikwurzel des Sternenstaubs dieser Galaxie
+     * (1M → 1, 1Mrd → 10, 1Bio → 100). Die Kubikwurzel hält das Wachstum über viele Galaxien stabil;
+     * mit der Quadratwurzel schaukelten sich Dunkle Materie und Dunkle Energie gegenseitig auf.
+     */
     fun darkMatterGain(state: GameState): Double =
         floor(
-            sqrt(state.runStardust / 1_000_000.0) * state.law.darkMatterMult *
+            cbrt(state.runStardust / DARK_MATTER_BASE) * state.law.darkMatterMult *
                 (1.0 + Artifact.DARK_COMPASS.perLevel * state.artifactLevel(Artifact.DARK_COMPASS)),
-        )
+        ).capped()
+
+    /** Sternenstaub dieser Galaxie, ab dem der Urknall [gain] Dunkle Materie bringt. */
+    fun runStardustForDarkMatter(state: GameState, gain: Double): Double {
+        val factor = state.law.darkMatterMult * (1.0 + Artifact.DARK_COMPASS.perLevel * state.artifactLevel(Artifact.DARK_COMPASS))
+        return ((gain / factor).pow(3) * DARK_MATTER_BASE).capped()
+    }
 
     fun maxOfflineSeconds(state: GameState): Double =
         BASE_OFFLINE_SECONDS +

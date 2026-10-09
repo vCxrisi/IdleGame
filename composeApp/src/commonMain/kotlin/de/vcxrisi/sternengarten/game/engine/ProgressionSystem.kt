@@ -77,7 +77,7 @@ class ProgressionSystem(private val random: Random) {
     /** Liefert die eingelöste Belohnung und den Sternenstaub aus einem Zeitsprung. */
     fun claimLoginReward(state: GameState): Triple<GameState, LoginReward, Double>? {
         val reward = state.pendingLoginReward ?: return null
-        val warp = BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult * reward.warpSeconds
+        val warp = (BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult * reward.warpSeconds).capped()
         val next = state.copy(
             pendingLoginReward = null,
             crystals = state.crystals + reward.crystals,

@@ -28,7 +28,7 @@ class ShopSystem(private val random: Random) {
     }
 
     private fun warp(state: GameState, seconds: Double): Pair<GameState, Double> {
-        val amount = BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult * seconds
+        val amount = (BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult * seconds).capped()
         return state.copy(
             stardust = state.stardust + amount,
             runStardust = state.runStardust + amount,

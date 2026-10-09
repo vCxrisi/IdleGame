@@ -215,7 +215,7 @@ class GameEngineTest {
     @Test
     fun bigBangKeepsMetaProgressAndOffersLaws() {
         val state = GameState(
-            runStardust = 4_000_000.0,
+            runStardust = 8_000_000.0, // ∛8 = 2 Dunkle Materie
             darkMatter = 1.0,
             stars = mapOf(Hex.ORIGIN to adult(StarType.RED_DWARF)),
             upgrades = mapOf(Upgrade.STELLAR_WIND to 3, Upgrade.DARK_ENERGY to 1),
