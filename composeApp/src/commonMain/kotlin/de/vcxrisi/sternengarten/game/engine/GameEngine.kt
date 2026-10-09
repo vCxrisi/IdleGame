@@ -255,18 +255,32 @@ class GameEngine(private val random: Random = Random.Default) {
         )
     }
 
-    fun levelUp(state: GameState, hex: Hex): GameState? {
+    /** Verbessert einen Stern um [count] Stufen auf einmal – nur, wenn alle bezahlbar sind. */
+    fun levelUp(state: GameState, hex: Hex, count: Int = 1): GameState? {
+        if (count < 1) return null
         val star = state.stars[hex] ?: return null
-        if (star.type == StarType.BLACK_HOLE || star.type == StarType.NEBULA_NURSERY) return null
-        val cost = Balance.levelUpCost(state, star)
+        if (!canLevel(star.type)) return null
+        val cost = Balance.levelUpCost(state, star, count)
         if (state.stardust < cost) return null
-        val level = star.level + 1
+        val level = star.level + count
         return state.copy(
             stardust = state.stardust - cost,
             stars = state.stars + (hex to star.copy(level = level)),
-            stats = state.stats.copy(levelUps = state.stats.levelUps + 1, highestLevel = max(state.stats.highestLevel, level)),
+            stats = state.stats.copy(levelUps = state.stats.levelUps + count, highestLevel = max(state.stats.highestLevel, level)),
         )
     }
+
+    /** Verbessert einen Stern um so viele Stufen wie bezahlbar; liefert auch die Anzahl. */
+    fun levelUpMax(state: GameState, hex: Hex): Pair<GameState, Int>? {
+        val star = state.stars[hex] ?: return null
+        if (!canLevel(star.type)) return null
+        val count = Balance.maxAffordableLevels(state, star)
+        if (count < 1) return null
+        val next = levelUp(state, hex, count) ?: return null
+        return next to count
+    }
+
+    fun canLevel(type: StarType): Boolean = type != StarType.BLACK_HOLE && type != StarType.NEBULA_NURSERY
 
     /** Entfernt einen Stern und erstattet die Hälfte des aktuellen Preises seiner Art. */
     fun remove(state: GameState, hex: Hex): GameState? {

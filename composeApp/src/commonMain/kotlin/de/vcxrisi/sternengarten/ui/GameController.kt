@@ -186,10 +186,18 @@ class GameController(
         dispatch(GameEvent.Planted(hex, type))
     }
 
-    fun levelUp(hex: Hex) {
-        val next = engine.levelUp(state, hex) ?: return
+    fun levelUp(hex: Hex, count: Int = 1) {
+        val next = engine.levelUp(state, hex, count) ?: return
         update(next)
-        dispatch(GameEvent.LeveledUp(hex, next.stars.getValue(hex).level))
+        dispatch(GameEvent.LeveledUp(hex, next.stars.getValue(hex).level, count))
+    }
+
+    fun canLevel(type: StarType): Boolean = engine.canLevel(type)
+
+    fun levelUpMax(hex: Hex) {
+        val (next, count) = engine.levelUpMax(state, hex) ?: return
+        update(next)
+        dispatch(GameEvent.LeveledUp(hex, next.stars.getValue(hex).level, count))
     }
 
     fun remove(hex: Hex) {

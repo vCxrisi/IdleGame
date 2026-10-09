@@ -12,7 +12,7 @@ import de.vcxrisi.sternengarten.game.model.StoreProduct
 /** Ereignisse, auf die die Oberfläche mit Effekten und Meldungen reagiert. */
 sealed interface GameEvent {
     data class Planted(val hex: Hex, val type: StarType) : GameEvent
-    data class LeveledUp(val hex: Hex, val level: Int) : GameEvent
+    data class LeveledUp(val hex: Hex, val level: Int, val gained: Int = 1) : GameEvent
     data class Removed(val hex: Hex) : GameEvent
     data class Supernova(val hex: Hex, val elements: Double) : GameEvent
     data class BecameWhiteDwarf(val hex: Hex) : GameEvent

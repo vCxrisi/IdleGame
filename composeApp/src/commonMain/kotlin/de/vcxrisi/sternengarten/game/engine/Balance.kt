@@ -9,6 +9,7 @@ import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
 import kotlin.math.floor
+import kotlin.math.ln
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -75,8 +76,34 @@ object Balance {
         return type.baseCost * type.costGrowth.pow(owned) * costMultiplier(state)
     }
 
+    /** Jede Stufe eines Sterns kostet 14 % mehr als die vorige. */
+    const val LEVEL_COST_GROWTH = 1.14
+
+    /** Obergrenze für "Max", damit die Produktion je Stufe sicher im Double-Bereich bleibt. */
+    const val MAX_LEVELS_PER_PURCHASE = 5000
+
     fun levelUpCost(state: GameState, star: Star): Double =
-        star.type.baseCost * 0.6 * 1.14.pow(star.level - 1) * state.law.costMult
+        star.type.baseCost * 0.6 * LEVEL_COST_GROWTH.pow(star.level - 1) * state.law.costMult
+
+    /** Gesamtkosten für [count] Stufen am Stück (geometrische Summe). */
+    fun levelUpCost(state: GameState, star: Star, count: Int): Double {
+        if (count <= 0) return 0.0
+        val growth = LEVEL_COST_GROWTH
+        return levelUpCost(state, star) * (growth.pow(count) - 1.0) / (growth - 1.0)
+    }
+
+    /** Wie viele Stufen sich mit dem aktuellen Sternenstaub höchstens kaufen lassen (0, wenn keine). */
+    fun maxAffordableLevels(state: GameState, star: Star): Int {
+        val first = levelUpCost(state, star)
+        if (first <= 0.0 || state.stardust < first) return 0
+        val growth = LEVEL_COST_GROWTH
+        val estimate = ln(1.0 + state.stardust * (growth - 1.0) / first) / ln(growth)
+        var count = floor(estimate).toInt().coerceIn(0, MAX_LEVELS_PER_PURCHASE)
+        // Rundungsfehler der Logarithmen ausgleichen.
+        while (count > 0 && levelUpCost(state, star, count) > state.stardust) count--
+        while (count < MAX_LEVELS_PER_PURCHASE && levelUpCost(state, star, count + 1) <= state.stardust) count++
+        return count
+    }
 
     /** Stufe 1 → ×1, jede Stufe linear mehr, alle 10 Stufen eine Verdopplung. */
     fun levelMultiplier(level: Int): Double = level * 2.0.pow(level / 10)

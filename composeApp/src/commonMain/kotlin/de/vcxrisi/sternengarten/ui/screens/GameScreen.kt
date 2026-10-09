@@ -62,6 +62,7 @@ import de.vcxrisi.sternengarten.ui.render.cometPosition
 import de.vcxrisi.sternengarten.ui.render.moteColor
 import de.vcxrisi.sternengarten.ui.theme.Palette
 import de.vcxrisi.sternengarten.ui.theme.starColors
+import kotlin.math.ln
 import kotlin.random.Random
 
 /** Merkt sich, ab welcher Animationszeit der aktuelle Komet sichtbar ist – für flüssige Bewegung. */
@@ -126,8 +127,11 @@ fun GameScreen(controller: GameController) {
                 }
                 is GameEvent.LeveledUp -> {
                     val c = layout.center(event.hex)
-                    particles.burst(c, 18, unit * 2.2f, unit * 0.06f, Palette.Stardust, 0.8f)
-                    particles.shockwave(c, unit * 0.9f, Palette.Stardust, 0.45f)
+                    // Mehrfach-Verbesserungen fallen sichtbar größer aus (begrenzt).
+                    val boost = (1f + ln(event.gained.toFloat())).coerceIn(1f, 4f)
+                    particles.burst(c, (18 * boost).toInt(), unit * 2.2f * boost.coerceAtMost(2.5f), unit * 0.06f, Palette.Stardust, 0.8f)
+                    particles.shockwave(c, unit * 0.9f * boost, Palette.Stardust, 0.45f + 0.1f * boost)
+                    if (event.gained >= 10) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
                 is GameEvent.Removed -> particles.burst(layout.center(event.hex), 20, unit * 1.6f, unit * 0.06f, Color(0xFF9A93B8), 0.8f)
                 is GameEvent.Supernova -> {

@@ -267,6 +267,75 @@ class GameEngineTest {
     }
 
     @Test
+    fun bulkLevelCostIsSumOfSingleSteps() {
+        val star = adult(StarType.YELLOW_STAR, level = 7)
+        val state = board(Hex.ORIGIN to star)
+        var expected = 0.0
+        for (i in 0 until 10) expected += Balance.levelUpCost(state, star.copy(level = star.level + i))
+        assertClose(expected, Balance.levelUpCost(state, star, 10))
+        assertClose(Balance.levelUpCost(state, star), Balance.levelUpCost(state, star, 1))
+        assertEquals(0.0, Balance.levelUpCost(state, star, 0))
+    }
+
+    @Test
+    fun levelUpByTenAtOnce() {
+        val star = adult(StarType.RED_DWARF, level = 3)
+        val cost = Balance.levelUpCost(board(Hex.ORIGIN to star), star, 10)
+        val state = board(Hex.ORIGIN to star).copy(stardust = cost + 5.0)
+        val next = assertNotNull(engine.levelUp(state, Hex.ORIGIN, 10))
+        assertEquals(13, next.stars.getValue(Hex.ORIGIN).level)
+        assertClose(5.0, next.stardust)
+        assertEquals(10, next.stats.levelUps)
+        assertEquals(13, next.stats.highestLevel)
+
+        val poor = state.copy(stardust = cost * 0.99)
+        assertNull(engine.levelUp(poor, Hex.ORIGIN, 10), "alle 10 Stufen müssen bezahlbar sein")
+        assertNull(engine.levelUp(state, Hex.ORIGIN, 0))
+    }
+
+    @Test
+    fun levelUpMaxBuysEverythingAffordable() {
+        val star = adult(StarType.BLUE_GIANT, level = 1)
+        val base = board(Hex.ORIGIN to star)
+        for (stardust in listOf(1e3, 5e4, 1e9, 1e30)) {
+            val state = base.copy(stardust = stardust)
+            val n = Balance.maxAffordableLevels(state, star)
+            if (n > 0) assertTrue(Balance.levelUpCost(state, star, n) <= stardust)
+            assertTrue(Balance.levelUpCost(state, star, n + 1) > stardust, "n=$n bei $stardust")
+            val result = engine.levelUpMax(state, Hex.ORIGIN)
+            if (n == 0) {
+                assertNull(result)
+            } else {
+                val (next, count) = assertNotNull(result)
+                assertEquals(n, count)
+                assertEquals(1 + n, next.stars.getValue(Hex.ORIGIN).level)
+                // Es bleibt weniger übrig, als die nächste Stufe kosten würde.
+                assertTrue(next.stardust < Balance.levelUpCost(next, next.stars.getValue(Hex.ORIGIN)))
+                assertTrue(next.stardust >= 0.0)
+            }
+        }
+        assertNull(engine.levelUpMax(base.copy(stardust = 0.0), Hex.ORIGIN))
+    }
+
+    @Test
+    fun maxLevelsAreCappedForHugeBudgets() {
+        val star = adult(StarType.RED_DWARF)
+        val state = board(Hex.ORIGIN to star).copy(stardust = 1e300)
+        assertEquals(Balance.MAX_LEVELS_PER_PURCHASE, Balance.maxAffordableLevels(state, star))
+        val (next, _) = assertNotNull(engine.levelUpMax(state, Hex.ORIGIN))
+        assertTrue(BoardAnalyzer.analyze(next).totalRate.isFinite())
+    }
+
+    @Test
+    fun blackHolesAndNurseriesCannotBeBulkLeveled() {
+        for (type in listOf(StarType.BLACK_HOLE, StarType.NEBULA_NURSERY)) {
+            val state = board(Hex.ORIGIN to adult(type)).copy(stardust = 1e30)
+            assertNull(engine.levelUp(state, Hex.ORIGIN, 10))
+            assertNull(engine.levelUpMax(state, Hex.ORIGIN))
+        }
+    }
+
+    @Test
     fun starTypesUnlockWithProgress() {
         val state = GameState(stardust = StarType.YELLOW_STAR.unlockAt)
         val result = engine.tick(state, 0.01)

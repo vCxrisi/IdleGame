@@ -258,9 +258,30 @@ fun StarInfoPanel(controller: GameController, hex: Hex, time: Float, modifier: M
                 }
                 GlowButton("Entfernen", { controller.remove(hex) }, color = Palette.Danger, subtitle = "50 % zurück")
             }
+
+            if (controller.canLevel(star.type)) {
+                // Mehrere Stufen auf einmal: jeder Knopf zeigt die Gesamtkosten.
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (count in BULK_LEVELS) {
+                        val cost = Balance.levelUpCost(state, star, count)
+                        GlowButton(
+                            "+$count", { controller.levelUp(hex, count) }, Modifier.weight(1f),
+                            color = Palette.Stardust, enabled = state.stardust >= cost, subtitle = formatNumber(cost), compact = true,
+                        )
+                    }
+                    val affordable = Balance.maxAffordableLevels(state, star)
+                    GlowButton(
+                        "Max", { controller.levelUpMax(hex) }, Modifier.weight(1f),
+                        color = Palette.Boost, enabled = affordable > 0, subtitle = if (affordable > 0) "+$affordable" else "–", compact = true,
+                    )
+                }
+            }
         }
     }
 }
+
+/** Stufen-Pakete für das Mehrfach-Verbessern im Stern-Panel. */
+private val BULK_LEVELS = listOf(10, 50, 100)
 
 @Composable
 private fun BonusChips(b: StarBreakdown) {
