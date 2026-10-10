@@ -294,14 +294,16 @@ fun GalaxySelectScreen(controller: GameController, time: Float, modifier: Modifi
                 Type.Label, color = galaxyColor(kind), align = TextAlign.Center,
             )
             Txt("Dunkle Materie: ${formatNumber(state.darkMatter)}", Type.Label, color = Palette.DarkMatter)
-            for (law in choices) LawCard(law, time) { controller.chooseGalaxy(law) }
+            // Steht über den Gesetzen, damit der Ausweg ohne Scrollen sichtbar ist.
             if (playable.isNotEmpty()) {
                 GlowButton(
                     "Später wählen",
                     { controller.switchGalaxy(controller.previousGalaxy?.takeIf { it in playable } ?: playable.first()) },
                     color = Palette.TextDim,
+                    compact = true,
                 )
             }
+            for (law in choices) LawCard(law, time) { controller.chooseGalaxy(law) }
         }
     }
 }
