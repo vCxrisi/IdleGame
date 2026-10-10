@@ -1258,4 +1258,13 @@ class GalaxyTest {
             "parked",
         )
     }
+
+    @Test
+    fun goalRewardStopsGrowingWithTheTargets() {
+        val progression = GameEngine(Random(3)).progression
+        val late = progression.rollGalaxyGoals(GameState(galaxyNumber = Balance.GOAL_REWARD_MAX_CYCLE))
+        val later = progression.rollGalaxyGoals(GameState(galaxyNumber = Balance.GOAL_REWARD_MAX_CYCLE + 40))
+        assertEquals(late.first().darkMatter, later.first().darkMatter)
+        assertTrue(progression.rollGalaxyGoals(GameState(galaxyNumber = 2)).first().darkMatter < late.first().darkMatter)
+    }
 }

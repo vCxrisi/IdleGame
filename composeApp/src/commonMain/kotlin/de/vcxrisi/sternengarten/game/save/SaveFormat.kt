@@ -10,7 +10,12 @@ data class SaveBackup(val key: String, val raw: String)
  * Ergebnis des Ladens. [state] ist `null`, wenn ein neues Spiel beginnt. Mit [backup] war der aktuelle Stand
  * unlesbar: Er wird gesichert, geladen wird der ältere v1-Stand, und der Spieler bekommt einen Hinweis.
  */
-data class LoadResult(val state: GameState?, val backup: SaveBackup? = null) {
+data class LoadResult(
+    val state: GameState?,
+    val backup: SaveBackup? = null,
+    /** Schlüssel einer früheren Sicherung, aus der [state] stammt; sie wird nach dem Laden entfernt. */
+    val restoredBackupKey: String? = null,
+) {
     /** Ob der aktuelle Spielstand nicht gelesen werden konnte – dann erscheint der Hinweis-Dialog. */
     val unreadable: Boolean get() = backup != null
 }
@@ -45,19 +50,42 @@ object SaveFormat {
     fun unreadableKey(epochMs: Long): String = UNREADABLE_KEY_PREFIX + epochMs
 
     /**
-     * Wählt aus den gespeicherten Rohtexten [v3] und [v1] den Stand, der geladen wird:
-     * - v3 lesbar: v3.
-     * - v3 fehlt: v1, also der Stand vor dem Update (er wird danach migriert).
-     * - v3 vorhanden, aber unlesbar: Der Rohtext kommt unter einen neuen Schlüssel, der noch nicht vergeben ist
-     *   ([keyTaken]), damit der Autosave ihn nicht für immer überschreibt. Geladen wird v1 oder nichts.
+     * Wählt aus den gespeicherten Rohtexten den Stand, der geladen wird – den zuletzt gespeicherten
+     * (`lastSavedEpochMs`), bei Gleichstand v3 vor einer Sicherung vor v1:
+     * - [v3]: der aktuelle Stand. Fehlt er, kommt der Stand von vor dem Update ([v1]) und wird danach migriert.
+     * - [v1]: Hat ein älterer Build nach dem Update weitergespielt, ist v1 neuer als v3 und gewinnt.
+     * - [backups]: frühere Sicherungen unlesbarer Stände (Schlüssel → Rohtext). Ist eine inzwischen lesbar
+     *   und neuer als alles andere, wird sie wiederhergestellt ([LoadResult.restoredBackupKey]).
+     * - v3 vorhanden, aber unlesbar (etwa eine Enum-Konstante aus einem neueren Build): Der Rohtext kommt unter
+     *   einen neuen Schlüssel, der noch nicht vergeben ist ([keyTaken]), damit der Autosave ihn nicht für immer
+     *   überschreibt; der Spieler bekommt einen Hinweis.
      *
-     * Rein: Sichern muss der Aufrufer, mit dem [LoadResult.backup] des Ergebnisses.
+     * Rein: Sichern und Entfernen muss der Aufrufer, mit [LoadResult.backup] und [LoadResult.restoredBackupKey].
      */
-    fun choose(v3: String?, v1: String?, nowMs: Long, keyTaken: (String) -> Boolean = { false }): LoadResult {
-        if (v3 == null) return LoadResult(decodeOrNull(v1))
-        decodeOrNull(v3)?.let { return LoadResult(it) }
-        var stamp = nowMs
-        while (keyTaken(unreadableKey(stamp))) stamp++
-        return LoadResult(decodeOrNull(v1), SaveBackup(unreadableKey(stamp), v3))
+    fun choose(
+        v3: String?,
+        v1: String?,
+        nowMs: Long,
+        keyTaken: (String) -> Boolean = { false },
+        backups: Map<String, String> = emptyMap(),
+    ): LoadResult {
+        val current = decodeOrNull(v3)
+        var backup: SaveBackup? = null
+        if (v3 != null && current == null) {
+            var stamp = nowMs
+            while (keyTaken(unreadableKey(stamp))) stamp++
+            backup = SaveBackup(unreadableKey(stamp), v3)
+        }
+        // Reihenfolge = Vorrang bei Gleichstand.
+        val candidates = ArrayList<Pair<String?, GameState>>()
+        current?.let { candidates += null to it }
+        for ((key, raw) in backups.entries.sortedBy { it.key }) decodeOrNull(raw)?.let { candidates += key to it }
+        decodeOrNull(v1)?.let { candidates += LEGACY_KEY to it }
+        var best: Pair<String?, GameState>? = null
+        for (candidate in candidates) {
+            if (best == null || candidate.second.lastSavedEpochMs > best.second.lastSavedEpochMs) best = candidate
+        }
+        val restored = best?.first?.takeIf { it != LEGACY_KEY }
+        return LoadResult(best?.second, backup, restored)
     }
 }

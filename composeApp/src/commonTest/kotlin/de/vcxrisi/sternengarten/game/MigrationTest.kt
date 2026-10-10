@@ -260,6 +260,30 @@ class MigrationTest {
     }
 
     @Test
+    fun theMostRecentlySavedStateWins() {
+        val current = GameState(stardust = 300.0, balanceVersion = 3, lastSavedEpochMs = 2_000)
+        val olderBuild = GameState(stardust = 900.0, balanceVersion = 2, lastSavedEpochMs = 5_000)
+        val v3 = SaveFormat.encode(current)
+        val v1 = SaveFormat.encode(olderBuild)
+
+        // Ein älterer Build hat nach dem Update weitergespielt: sein v1-Stand ist neuer und gewinnt.
+        assertEquals(olderBuild, SaveFormat.choose(v3, v1, NOW).state)
+        // Ohne neueren v1-Stand bleibt es beim v3-Stand.
+        assertEquals(current, SaveFormat.choose(v3, SaveFormat.encode(olderBuild.copy(lastSavedEpochMs = 1_000)), NOW).state)
+
+        // Eine früher unlesbare Sicherung, die jetzt lesbar und neuer ist, wird wiederhergestellt.
+        val rescued = GameState(stardust = 5_000.0, balanceVersion = 3, lastSavedEpochMs = 9_000)
+        val key = SaveFormat.unreadableKey(1)
+        val restored = SaveFormat.choose(v3, v1, NOW, backups = mapOf(key to SaveFormat.encode(rescued)))
+        assertEquals(rescued, restored.state)
+        assertEquals(key, restored.restoredBackupKey)
+        assertFalse(restored.unreadable)
+        // Eine weiterhin unlesbare oder ältere Sicherung bleibt liegen.
+        assertNull(SaveFormat.choose(v3, v1, NOW, backups = mapOf(key to "kaputt")).restoredBackupKey)
+        assertNull(SaveFormat.choose(v3, null, NOW, backups = mapOf(key to SaveFormat.encode(rescued.copy(lastSavedEpochMs = 10)))).restoredBackupKey)
+    }
+
+    @Test
     fun normalizeIsIdempotent() {
         val clean = SaveMigration.migrate(GameState()).first
         assertSame(clean, SaveMigration.normalizeGalaxies(clean))

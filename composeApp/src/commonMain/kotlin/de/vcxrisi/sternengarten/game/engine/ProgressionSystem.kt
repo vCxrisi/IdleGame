@@ -157,7 +157,10 @@ class ProgressionSystem(private val random: Random) {
         val kind = state.activeGalaxy
         val k = kind.costScale
         val maxFields = Balance.maxFieldCount(state.law).toDouble()
-        val darkMatter = ceil((g + 1) / 2.0 * kind.goalDarkMatterMult)
+        // Die Belohnung wächst nur so lange mit, wie auch die Ziele schwerer werden – sonst lohnte es sich,
+        // späte Galaxien nur für die gedeckelten Ziele immer wieder zu kollabieren.
+        val rewardCycle = min(g, Balance.GOAL_REWARD_MAX_CYCLE)
+        val darkMatter = ceil((rewardCycle + 1) / 2.0 * kind.goalDarkMatterMult)
         // Die besondere Sternart erst als Ziel, wenn sie schon freigeschaltet ist – sonst bleibt es unerreichbar.
         val exclusiveReady = kind.exclusiveStar?.let { it in state.unlocked } == true
         return GoalKind.entries.filter { it != GoalKind.EXCLUSIVE_STARS || exclusiveReady }.shuffled(random).take(3).map { goal ->

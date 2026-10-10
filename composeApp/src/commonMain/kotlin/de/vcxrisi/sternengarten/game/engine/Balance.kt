@@ -243,6 +243,9 @@ object Balance {
     /** Takt, in dem die geparkten Galaxien bei offener App weiterlaufen (Sekunden). */
     const val BACKGROUND_STEP = 1.0
 
+    /** Ab diesem Zyklus wächst die Dunkle Materie der Galaxie-Ziele nicht mehr; die meisten Ziele sind dann gedeckelt. */
+    const val GOAL_REWARD_MAX_CYCLE = 12
+
     /** Offline genügen grobe Schritte: Die Produktion ist zwischen zwei Lebensereignissen konstant. */
     const val OFFLINE_STEP_SECONDS = 5.0
     /**

@@ -11,15 +11,22 @@ import kotlin.time.ExperimentalTime
  */
 class SaveRepository(private val settings: Settings = Settings()) {
 
-    /** Lädt den aktuellen Stand. Ist er unlesbar, wird sein Rohtext vorher gesichert (siehe [SaveFormat.choose]). */
+    /** Lädt den zuletzt gespeicherten Stand; ein unlesbarer wird vorher gesichert (siehe [SaveFormat.choose]). */
     fun load(): LoadResult {
+        val backups = settings.keys
+            .filter { it.startsWith(SaveFormat.UNREADABLE_KEY_PREFIX) }
+            .mapNotNull { key -> settings.getStringOrNull(key)?.let { key to it } }
+            .toMap()
         val result = SaveFormat.choose(
             v3 = settings.getStringOrNull(SaveFormat.KEY),
             v1 = settings.getStringOrNull(SaveFormat.LEGACY_KEY),
             nowMs = nowEpochMillis(),
             keyTaken = settings::hasKey,
+            backups = backups,
         )
         result.backup?.let { settings.putString(it.key, it.raw) }
+        // Die wiederhergestellte Sicherung wird mit dem nächsten Speichern zum v3-Stand.
+        result.restoredBackupKey?.let { settings.remove(it) }
         return result
     }
 

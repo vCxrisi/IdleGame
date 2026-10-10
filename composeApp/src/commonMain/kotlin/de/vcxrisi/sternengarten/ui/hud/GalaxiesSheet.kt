@@ -308,7 +308,11 @@ private fun BridgesTab(controller: GameController, time: Float) {
     }
     // Eine Galaxie könnte inzwischen fehlen (etwa nach einem Neustart der Übersicht) – dann neu wählen.
     if (from !in kinds) from = kinds.first()
-    if (to !in kinds) to = kinds.first { it != from }
+    // Ist das Ziel gleich der Quelle (etwa nach Wahl der Quelle), springt es auf eine andere Galaxie –
+    // bevorzugt auf eine, in die noch keine Brücke führt.
+    if (to !in kinds || to == from) {
+        to = kinds.firstOrNull { k -> k != from && state.bridges.none { it.to == k } } ?: kinds.first { it != from }
+    }
     Txt("Von", Type.Small)
     TabRow(kinds, from, { it.shortName }, Palette.Accent, { from = it })
     Txt("Nach", Type.Small)
