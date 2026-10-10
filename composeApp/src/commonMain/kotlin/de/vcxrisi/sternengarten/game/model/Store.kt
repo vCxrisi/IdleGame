@@ -40,6 +40,11 @@ enum class StoreProduct(
         "Für immer: ×2 Produktion, +4 h Offline-Zeit und Kometen werden automatisch gefangen",
         consumable = false, fallbackPrice = "7,99 €",
     ),
+    GALAXY_PIONEER(
+        "de.vcxrisi.sternengarten.galaxy_pioneer", "Galaxie-Pionier",
+        "Für immer: 6 zusätzliche Startfelder in jeder Galaxie, Erschließen und Brückenbau dauern nur halb so lange. Dazu einmalig 250 Kristalle und 2 Artefakt-Kapseln",
+        consumable = false, fallbackPrice = "4,99 €", crystals = 250, capsules = 2,
+    ),
     ;
 
     companion object {

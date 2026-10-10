@@ -49,6 +49,10 @@ data class GameState(
     val eventCooldown: Double = 150.0,
     val galaxyGoals: List<GalaxyGoal> = emptyList(),
     val runSupernovas: Int = 0,
+    /** Freigekaufte Felder dieser Galaxie – nur hier dürfen Sterne stehen. */
+    val ownedFields: Set<Hex> = STARTING_FIELDS,
+    /** Seit dem letzten Urknall dieser Galaxie gekaufte Felder; bestimmt den Preis des nächsten. */
+    val fieldsBought: Int = 0,
 
     // ---- Dauerhafter Fortschritt
     /** Premium-Währung: im Spiel verdient oder im Store gekauft. */
@@ -79,6 +83,14 @@ data class GameState(
      * gelten als 0 und werden beim Laden migriert (siehe SaveMigration).
      */
     val balanceVersion: Int = 0,
+
+    // ---- Mehrere Galaxien (alle Galaxie-Felder oben beschreiben immer die aktive, siehe GalaxyRun.kt)
+    val activeGalaxy: GalaxyKind = GalaxyKind.SPIRAL,
+    /** Laufende Erschließung der nächsten Galaxie. */
+    val unlock: GalaxyUnlock? = null,
+    val bridges: List<StarBridge> = emptyList(),
+    /** Die übrigen Galaxien. Enthält nie [activeGalaxy]; steht zuletzt, damit `equals` früh abbricht. */
+    val parked: Map<GalaxyKind, GalaxyRun> = emptyMap(),
 ) {
     fun level(upgrade: Upgrade): Int = upgrades[upgrade] ?: 0
 
@@ -88,8 +100,11 @@ data class GameState(
 
     val eventKind: CosmicEvent? get() = event?.kind
 
-    /** Farbton des Nebels: gewähltes Thema oder das Naturgesetz der Galaxie. */
-    val nebulaHue: Float get() = activeTheme.hue ?: law.hue
+    /** Farbton des Nebels: gewähltes Thema, sonst [defaultNebulaHue]. */
+    val nebulaHue: Float get() = activeTheme.hue ?: defaultNebulaHue
+
+    /** Farbton des Naturgesetzes; unter den vertrauten Gesetzen der Farbton der Galaxieart. */
+    val defaultNebulaHue: Float get() = law.takeIf { it != GalaxyLaw.NORMAL }?.hue ?: activeGalaxy.hue
 
     fun amount(currency: Currency): Double = when (currency) {
         Currency.STARDUST -> stardust

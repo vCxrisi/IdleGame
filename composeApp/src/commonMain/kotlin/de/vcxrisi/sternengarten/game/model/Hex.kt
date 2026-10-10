@@ -21,6 +21,9 @@ data class Hex(val q: Int, val r: Int) {
 
     fun length(): Int = distanceTo(ORIGIN)
 
+    /** Um 60° um den Ursprung gedreht: Richtung d wird zu Richtung d + 1. */
+    fun rotated60(): Hex = Hex(q + r, -q)
+
     companion object {
         val ORIGIN = Hex(0, 0)
 
@@ -42,5 +45,18 @@ data class Hex(val q: Int, val r: Int) {
 
         /** Nur der äußere Ring mit genau diesem Radius. */
         fun ring(radius: Int): List<Hex> = area(radius).filter { it.length() == radius }
+
+        /**
+         * Alle Felder bis zum gegebenen Radius, Ring für Ring von innen nach außen. Jeder Block aus sechs Feldern
+         * ist eine volle Drehung in 60°-Schritten – so wächst der Garten immer symmetrisch.
+         */
+        fun spiral(radius: Int): List<Hex> = buildList {
+            add(ORIGIN)
+            for (r in 1..radius) {
+                for (j in 0 until r) {
+                    for (d in 0 until 6) add(DIRECTIONS[d] * r + DIRECTIONS[(d + 2) % 6] * j)
+                }
+            }
+        }
     }
 }

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import de.vcxrisi.sternengarten.game.engine.Balance
 import de.vcxrisi.sternengarten.game.model.Artifact
 import de.vcxrisi.sternengarten.game.model.CrystalOffer
 import de.vcxrisi.sternengarten.game.model.NebulaTheme
@@ -43,10 +44,13 @@ import de.vcxrisi.sternengarten.ui.render.drawNebula
 import de.vcxrisi.sternengarten.ui.theme.Palette
 import de.vcxrisi.sternengarten.ui.theme.Type
 import de.vcxrisi.sternengarten.ui.theme.formatDecimal
+import de.vcxrisi.sternengarten.ui.theme.formatDuration
 import de.vcxrisi.sternengarten.ui.theme.formatNumber
+import de.vcxrisi.sternengarten.ui.theme.galaxyColor
 import de.vcxrisi.sternengarten.ui.theme.rarityColor
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.min
 import kotlin.math.sin
 
 @Composable
@@ -70,7 +74,7 @@ fun BoxScope.ShopSheet(controller: GameController, time: Float) {
         },
     ) {
         when (controller.shopTab) {
-            ShopTab.CRYSTALS -> CrystalsTab(controller)
+            ShopTab.CRYSTALS -> CrystalsTab(controller, time)
             ShopTab.ARTIFACTS -> ArtifactsTab(controller, time)
             ShopTab.COSMETICS -> CosmeticsTab(controller, time)
         }
@@ -80,7 +84,7 @@ fun BoxScope.ShopSheet(controller: GameController, time: Float) {
 // ------------------------------------------------------------ Kristalle & Echtgeld
 
 @Composable
-private fun CrystalsTab(controller: GameController) {
+private fun CrystalsTab(controller: GameController, time: Float) {
     val state = controller.state
 
     if (!state.owns(StoreProduct.STARTER_PACK)) {
@@ -90,6 +94,17 @@ private fun CrystalsTab(controller: GameController) {
         FeaturedOffer(controller, StoreProduct.WANDERER_PASS, Palette.DarkMatter, "DAUERHAFT")
     } else {
         Txt("Du bist Sternenwanderer: ×2 Produktion, +4 h Offline-Zeit, Kometen werden automatisch gefangen.", Type.Small, color = Palette.DarkMatter)
+    }
+    // Der Pionier lohnt sich erst, wenn mehrere Galaxien in Sicht sind – und nur, wenn der Store ihn anbietet.
+    if (state.owns(StoreProduct.GALAXY_PIONEER)) {
+        Txt(
+            "Du bist Galaxie-Pionier: 6 zusätzliche Startfelder in jeder Galaxie, Erschließen und Brückenbau dauern halb so lange.",
+            Type.Small, color = Palette.Accent,
+        )
+    } else if (controller.storeOffers[StoreProduct.GALAXY_PIONEER.productId] != null &&
+        (state.parked.isNotEmpty() || state.unlock != null || state.darkMatter >= 100.0)
+    ) {
+        FeaturedOffer(controller, StoreProduct.GALAXY_PIONEER, Palette.Accent, "DAUERHAFT")
     }
 
     SectionTitle("Sternenkristalle", Palette.Crystal)
@@ -113,11 +128,14 @@ private fun CrystalsTab(controller: GameController) {
     }
 
     SectionTitle("Für Kristalle", Palette.Stardust)
+    TimerSkipRows(controller, time)
     for (offer in listOf(CrystalOffer.WARP_1H, CrystalOffer.WARP_8H, CrystalOffer.BOOST)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Txt(offer.displayName, Type.Label)
                 Txt(offer.description, Type.Small)
+                // Zeitsprung und Kometenrausch wirken nur in der aktiven Galaxie.
+                if (state.parked.isNotEmpty()) Txt("Wirkt in ${state.galaxyName}", Type.Small, color = galaxyColor(state.activeGalaxy))
             }
             CrystalButton(offer.price, state.crystals >= offer.price) { controller.buyOffer(offer) }
         }
@@ -131,6 +149,35 @@ private fun CrystalsTab(controller: GameController) {
         )
         Spacer(Modifier.width(8.dp))
         GlowButton("Wiederherstellen", controller::restorePurchases, color = Palette.TextDim, compact = true)
+    }
+}
+
+/** „Sofort fertig“ für eine laufende Erschließung und eine Brücke im Bau. */
+@Composable
+private fun TimerSkipRows(controller: GameController, time: Float) {
+    val state = controller.state
+    val now = controller.nowMs
+    state.unlock?.let { unlock ->
+        val remaining = (unlock.readyAtMs - now).coerceAtLeast(0L)
+        val cost = Balance.timerSkipCost(min(remaining, unlock.readyAtMs - unlock.startedAtMs))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Txt("Galaxie sofort erschließen", Type.Label)
+                Txt("${unlock.kind.displayName} · noch ${formatDuration(remaining / 1000.0)}", Type.Small)
+            }
+            ConfirmCrystalButton("Sofort", cost, state.crystals >= cost, time, controller::skipGalaxyUnlock)
+        }
+    }
+    state.bridges.firstOrNull { !it.built }?.let { bridge ->
+        val remaining = (bridge.readyAtMs - now).coerceAtLeast(0L)
+        val cost = Balance.timerSkipCost(min(remaining, bridge.readyAtMs - bridge.startedAtMs))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Txt("Brücke sofort fertigstellen", Type.Label)
+                Txt("${bridge.from.shortName} → ${bridge.to.shortName} · noch ${formatDuration(remaining / 1000.0)}", Type.Small)
+            }
+            ConfirmCrystalButton("Sofort", cost, state.crystals >= cost, time, { controller.skipBridge(bridge.from, bridge.to) })
+        }
     }
 }
 
@@ -348,7 +395,7 @@ private fun CosmeticsTab(controller: GameController, time: Float) {
             for (theme in row) {
                 val owned = theme in state.ownedThemes
                 val active = state.activeTheme == theme
-                val hue = theme.hue ?: state.law.hue
+                val hue = theme.hue ?: state.defaultNebulaHue
                 CosmeticCard(
                     title = theme.displayName,
                     status = when {

@@ -44,6 +44,13 @@ Sternengarten ist ein Idle-Spiel für Android und iOS (Desktop zum Testen), geba
   - `Balance`: **alle** Spielwerte und Formeln. Balancing wird nur hier geändert.
 - Zufall wird als `Random` in den Konstruktor gereicht; Tests nutzen feste Seeds.
 
+**Mehrere Galaxien per Projektion:**
+- Die flachen Galaxie-Felder von `GameState` (`stardust`, `stars`, `law`, `ownedFields`, nicht-permanente `upgrades`, …) beschreiben immer die **aktive** Galaxie (`activeGalaxy`). Geparkte Galaxien liegen als `GalaxyRun` in `parked` (nie die aktive).
+- `activeRun()`/`withRun()`/`projected()` in `game/model/GalaxyRun.kt` sind die einzigen Stellen, die Felder zwischen beiden Formen kopieren. Ein neues `GameState`-Feld muss dort oder in `META_FIELDS` von `GalaxyTest` eingetragen werden, sonst schlägt `everyGameStateFieldIsClassified` fehl.
+- `GameEngine` kennt nur die aktive Galaxie. `GalaxyOrchestrator` tickt geparkte Galaxien (1 Hz, ohne Kometen/Ereignisse/Spielzeit), holt Offline-Zeit nach (gemeinsames Budget von 720 Schritten), verwaltet Erschließungs- und Brücken-Timer (Wanduhr, `nowMs` von außen) und Sternenbrücken.
+- Staubpreise einer Galaxie skalieren mit `GalaxyKind.costScale`; `totalStardust` zählt in Sternenstaub-Wert. Brückenstaub geht nie in `runStardust`.
+- Neubeginn einer Galaxie nur über `GalaxyFactory.freshRun`.
+
 **`ui/GameController`: der einzige Zustandshalter für Compose.**
 - Hält `state` und `analysis` und simuliert in festen Schritten von 0,1 s nach Wanduhr (`frame(dt)`).
 - Lücken über 30 s gelten als Offline-Zeit (`applyOffline`, begrenzt durch `Balance.maxOfflineSeconds`).
@@ -62,7 +69,7 @@ Sternengarten ist ein Idle-Spiel für Android und iOS (Desktop zum Testen), geba
 
 ## Spielstände und Zahlen (wichtig)
 
-- **Speicherformat:** Gespeichert wird das JSON von `GameState` unter dem Schlüssel `sternengarten.save.v1` (multiplatform-settings, `SaveRepository`, `ignoreUnknownKeys`, `allowStructuredMapKeys` für `Map<Hex, …>`). Neue Felder brauchen Default-Werte.
+- **Speicherformat:** Gespeichert wird das JSON von `GameState` unter dem Schlüssel `sternengarten.save.v3` (multiplatform-settings, `SaveRepository`/`SaveFormat`, `ignoreUnknownKeys`, `allowStructuredMapKeys` für `Map<Hex, …>`). Der alte Schlüssel `…v1` wird nur noch gelesen, damit ältere Builds den neuen Stand nicht überschreiben. Neue Felder brauchen Default-Werte.
 - **Enum-Konstanten im Zustand nie umbenennen oder löschen.** Das betrifft u. a. `StarType`, `Upgrade`, `GalaxyLaw`, `Artifact`. Eine unbekannte Konstante lässt das Dekodieren scheitern, das Spiel startet neu und der Autosave überschreibt den Spielstand. Veraltete Einträge bleiben stehen und werden nur ausgeblendet.
 - **Formatänderungen und Balancing-Brüche:** `SaveMigration.CURRENT_BALANCE_VERSION` erhöhen und in `SaveMigration.migrate` umrechnen.
   - Die Migration läuft bei jedem Laden vor der Offline-Simulation.
@@ -71,7 +78,7 @@ Sternengarten ist ein Idle-Spiel für Android und iOS (Desktop zum Testen), geba
   - Neue Multiplikatoren und Belohnungen mit `capped()` begrenzen.
   - `sanitized()` läuft nach jedem Tick und Update.
   - Hintergrund: Ein echter TestFlight-Spielstand lief einmal auf ∞/NaN über und zeigte danach Sternenstaub 0.
-- **Balancing-Schutz:** `BalanceSimulationTest` lässt einen gierigen Bot zehn Galaxien spielen und prüft, dass das Wachstum der Dunklen Materie abbremst. Nach jeder Balancing-Änderung ausführen.
+- **Balancing-Schutz:** `BalanceSimulationTest` lässt einen gierigen Bot zehn Galaxien nacheinander spielen und prüft, dass das Wachstum der Dunklen Materie abbremst; `MultiGalaxySimulationTest` spielt alle fünf Galaxien parallel mit Brücken und vergleicht mit dem Einzelbot. Nach jeder Balancing-Änderung ausführen.
 
 ## iOS und CI
 

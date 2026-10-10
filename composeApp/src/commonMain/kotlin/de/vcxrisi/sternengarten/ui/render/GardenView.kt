@@ -17,6 +17,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -24,6 +25,8 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
@@ -42,12 +45,21 @@ import de.vcxrisi.sternengarten.game.model.LifePhase
 import de.vcxrisi.sternengarten.game.model.Star
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.ui.fx.ParticleSystem
+import de.vcxrisi.sternengarten.ui.theme.Palette
+import de.vcxrisi.sternengarten.ui.theme.formatNumber
+import de.vcxrisi.sternengarten.ui.theme.galaxyColor
 import de.vcxrisi.sternengarten.ui.theme.starColors
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 import kotlin.math.sqrt
+
+/** Gemerkte Kameraposition, etwa je Galaxie. */
+data class CameraPose(val pan: Offset, val zoom: Float, val autoFit: Boolean)
 
 /** Kamera über dem Garten: Verschiebung in Pixeln und Zoomfaktor. */
 @Stable
@@ -56,6 +68,14 @@ class Camera {
     var zoom by mutableFloatStateOf(1f)
     var shake by mutableFloatStateOf(0f)
     var fitted = false
+
+    /** Solange der Spieler nicht selbst verschiebt oder zoomt, folgt die Kamera dem wachsenden Garten. */
+    var autoFit = true
+
+    /** Ob die nächste Einpassung weich hinübergleitet statt zu springen. */
+    private var animateFit = false
+    private var targetPan: Offset? = null
+    private var targetZoom = 1f
 
     fun toWorld(screen: Offset, viewport: Size): Offset =
         (screen - viewport.center() - pan) / zoom
@@ -70,17 +90,78 @@ class Camera {
         zoom = newZoom
     }
 
-    fun fit(viewport: Size, layout: HexLayout, radius: Int) {
-        val gardenWidth = layout.size * sqrt(3f) * (radius * 2f + 1f)
-        val gardenHeight = layout.size * (radius * 3f + 2f)
-        zoom = min(viewport.width * 0.94f / gardenWidth, viewport.height * 0.55f / gardenHeight).coerceIn(MIN_ZOOM, MAX_ZOOM)
-        pan = Offset(0f, -viewport.height * 0.02f)
+    /** Beim nächsten Zeichnen neu einpassen; [animate] gleitet hinüber. */
+    fun requestFit(animate: Boolean) {
+        fitted = false
+        animateFit = animate
+    }
+
+    /** Der Spieler übernimmt: keine Kamerafahrt und keine automatische Einpassung mehr. */
+    fun takeControl() {
+        autoFit = false
+        targetPan = null
+    }
+
+    fun pose(): CameraPose = CameraPose(pan, zoom, autoFit)
+
+    fun moveTo(pose: CameraPose) {
+        pan = pose.pan
+        zoom = pose.zoom
+        autoFit = pose.autoFit
+        targetPan = null
         fitted = true
+    }
+
+    /** Zoomt so, dass alle [hexes] ins Bild passen, und rückt ihre Mitte ins Zentrum. */
+    fun fitTo(viewport: Size, layout: HexLayout, hexes: Collection<Hex>) {
+        if (hexes.isEmpty()) return
+        var minX = Float.MAX_VALUE
+        var maxX = -Float.MAX_VALUE
+        var minY = Float.MAX_VALUE
+        var maxY = -Float.MAX_VALUE
+        for (hex in hexes) {
+            val c = layout.center(hex)
+            minX = min(minX, c.x)
+            maxX = max(maxX, c.x)
+            minY = min(minY, c.y)
+            maxY = max(maxY, c.y)
+        }
+        val gardenWidth = maxX - minX + layout.size * sqrt(3f)
+        val gardenHeight = maxY - minY + layout.size * 2f
+        val newZoom = min(viewport.width * 0.94f / gardenWidth, viewport.height * 0.55f / gardenHeight).coerceIn(MIN_ZOOM, MAX_ZOOM)
+        val mid = Offset((minX + maxX) / 2f, (minY + maxY) / 2f)
+        val newPan = -mid * newZoom + Offset(0f, -viewport.height * 0.02f)
+        if (animateFit) {
+            targetPan = newPan
+            targetZoom = newZoom
+        } else {
+            pan = newPan
+            zoom = newZoom
+            targetPan = null
+        }
+        animateFit = false
+        fitted = true
+    }
+
+    /** Führt eine laufende Kamerafahrt pro Frame ein Stück weiter. */
+    fun step(dt: Float) {
+        val target = targetPan ?: return
+        val k = 1f - exp(-9f * dt)
+        pan += (target - pan) * k
+        zoom += (targetZoom - zoom) * k
+        if ((target - pan).getDistance() < 0.5f && abs(targetZoom - zoom) < 0.001f) {
+            pan = target
+            zoom = targetZoom
+            targetPan = null
+        }
     }
 
     companion object {
         const val MIN_ZOOM = 0.35f
         const val MAX_ZOOM = 2.8f
+
+        /** Darunter wären die Preise an den Grenzfeldern nicht mehr lesbar. */
+        const val PRICE_LABEL_ZOOM = 0.7f
     }
 }
 
@@ -100,12 +181,19 @@ fun GardenView(
     state: GameState,
     analysis: BoardAnalysis,
     selectedHex: Hex?,
+    /** Felder, die sich freikaufen lassen, mit dem Preis des nächsten. */
+    frontier: Set<Hex>,
+    selectedField: Hex?,
+    fieldPrice: Double,
+    fieldAffordable: Boolean,
     camera: Camera,
     layout: HexLayout,
     starfield: Starfield,
     particles: ParticleSystem,
     clock: Float,
     cometProgress: Float,
+    /** Sekunden seit dem letzten Galaxiewechsel – für den Warp-Blitz. */
+    switchAge: Float,
     onTapCell: (Hex) -> Unit,
     onTapComet: () -> Unit,
     modifier: Modifier = Modifier,
@@ -115,13 +203,13 @@ fun GardenView(
     val currentCometProgress by rememberUpdatedState(cometProgress)
     val tapCell by rememberUpdatedState(onTapCell)
     val tapComet by rememberUpdatedState(onTapComet)
-    val radius = Balance.gardenRadius(state)
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
             .pointerInput(Unit) {
                 detectTransformGestures { centroid, panChange, zoomChange, _ ->
+                    camera.takeControl()
                     val viewport = Size(size.width.toFloat(), size.height.toFloat())
                     camera.pan += panChange
                     if (zoomChange != 1f) camera.zoomAround(centroid, viewport, zoomChange)
@@ -135,6 +223,7 @@ fun GardenView(
                         if (event.type == PointerEventType.Scroll) {
                             val change = event.changes.first()
                             val viewport = Size(size.width.toFloat(), size.height.toFloat())
+                            camera.takeControl()
                             camera.zoomAround(change.position, viewport, exp(-change.scrollDelta.y * 0.12f))
                             change.consume()
                         }
@@ -157,7 +246,8 @@ fun GardenView(
                 }
             },
     ) {
-        if (!camera.fitted) camera.fit(size, layout, radius)
+        if (!camera.fitted) camera.fitTo(size, layout, state.ownedFields + frontier)
+        val kindColor = galaxyColor(state.activeGalaxy)
         val shakeOffset = if (camera.shake > 0.01f) {
             Offset(sin(clock * 71f) * camera.shake, sin(clock * 53f + 1f) * camera.shake)
         } else Offset.Zero
@@ -169,7 +259,8 @@ fun GardenView(
             translate(size.width / 2f + camera.pan.x + shakeOffset.x, size.height / 2f + camera.pan.y + shakeOffset.y)
             scale(camera.zoom, camera.zoom, pivot = Offset.Zero)
         }) {
-            drawCells(state, layout, radius, selectedHex, clock)
+            drawCells(state, layout, clock)
+            drawFrontier(state, frontier, layout, kindColor, fieldAffordable, priceLabel(textMeasurer, fieldPrice, kindColor, fieldAffordable, camera.zoom), clock)
             drawPulsarRays(state, layout, clock)
             drawBlackHoleStreams(state, layout, analysis, clock)
             drawConstellations(analysis.constellations, layout, clock)
@@ -184,13 +275,29 @@ fun GardenView(
                     drawText(label, topLeft = Offset(center.x - label.size.width / 2f, center.y + layout.size * 0.5f))
                 }
             }
-            selectedHex?.let { drawSelection(layout.center(it), layout, clock) }
+            selectedHex?.let { drawSelection(layout.center(it), layout, clock, SELECTION_COLOR) }
+            selectedField?.let { drawSelection(layout.center(it), layout, clock, kindColor) }
             particles.draw(this)
         }
 
         state.event?.let { drawEventOverlay(it, clock, camera.toScreen(Offset.Zero, size), layout.size * camera.zoom) }
         state.comet?.let { drawComet(it, cometProgress, clock) }
+        if (switchAge in 0f..WARP_SECONDS) drawWarp(switchAge / WARP_SECONDS, camera.toScreen(Offset.Zero, size), kindColor)
     }
+}
+
+/** Dauer des Warp-Blitzes nach einem Galaxiewechsel. */
+private const val WARP_SECONDS = 0.6f
+
+private val SELECTION_COLOR = Color(0xFF9EE8FF)
+
+/** Preis-Etikett der Grenzfelder; einmal pro Frame gemessen und nur, wenn es groß genug zu lesen ist. */
+private fun priceLabel(measurer: TextMeasurer, price: Double, color: Color, affordable: Boolean, zoom: Float): TextLayoutResult? {
+    if (zoom < Camera.PRICE_LABEL_ZOOM) return null
+    return measurer.measure(
+        formatNumber(price),
+        TextStyle(color = (if (affordable) color else Palette.Danger).copy(alpha = 0.85f), fontSize = 10.sp, fontWeight = FontWeight.Bold),
+    )
 }
 
 /** Stabiler Pseudozufall pro Feld im Bereich 0..1. */
@@ -212,44 +319,94 @@ fun visualOf(state: GameState, star: Star): StarVisual {
     )
 }
 
-private fun DrawScope.drawCells(state: GameState, layout: HexLayout, radius: Int, selected: Hex?, clock: Float) {
+private fun DrawScope.drawCells(state: GameState, layout: HexLayout, clock: Float) {
     val path = layout.hexPath()
-    val hue = state.law.hue
+    // Jede Galaxieart behält ihren eigenen Farbton, auch unter fremden Naturgesetzen.
+    val hue = state.activeGalaxy.hue
     val edge = Color.hsv((hue + 20f) % 360f, 0.35f, 1f)
-    for (hex in Hex.area(radius)) {
+    for (hex in state.ownedFields) {
         val c = layout.center(hex)
         val enrichment = state.enrichment[hex] ?: 0.0
         val occupied = hex in state.stars
         translate(c.x, c.y) {
             val baseAlpha = if (occupied) 0.10f else 0.06f
             drawPath(path, Color.hsv(hue, 0.45f, 0.75f).copy(alpha = baseAlpha))
-            if (enrichment > 0.0) {
-                val glow = (0.10f + 0.07f * enrichment.toFloat()).coerceAtMost(0.4f) * (0.85f + 0.15f * sin(clock * 1.5f + seedOf(hex) * 6f))
-                drawPath(
-                    path,
-                    Brush.radialGradient(listOf(Color(0xFFFFC85A).copy(alpha = glow), Color(0xFFFF7A3D).copy(alpha = glow * 0.3f)), Offset.Zero, layout.size),
-                    blendMode = BlendMode.Plus,
-                )
-            }
+            if (enrichment > 0.0) drawEnrichment(path, layout, enrichment, clock, hex, 1f)
             drawPath(path, edge.copy(alpha = if (occupied) 0.30f else 0.22f), style = Stroke(width = 1.5f))
-        }
-    }
-    // Der nächste Ring als Versprechen auf Wachstum.
-    if (radius < Balance.MAX_RADIUS) {
-        val dashed = Stroke(width = 1f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 6f)))
-        for (hex in Hex.ring(radius + 1)) {
-            val c = layout.center(hex)
-            translate(c.x, c.y) { drawPath(path, edge.copy(alpha = 0.06f), style = dashed) }
         }
     }
 }
 
-private fun DrawScope.drawSelection(center: Offset, layout: HexLayout, clock: Float) {
+/** Goldenes Leuchten gedüngter Felder; [strength] dämpft es auf noch nicht gekauften Feldern. */
+private fun DrawScope.drawEnrichment(path: Path, layout: HexLayout, enrichment: Double, clock: Float, hex: Hex, strength: Float) {
+    val glow = (0.10f + 0.07f * enrichment.toFloat()).coerceAtMost(0.4f) * (0.85f + 0.15f * sin(clock * 1.5f + seedOf(hex) * 6f)) * strength
+    drawPath(
+        path,
+        Brush.radialGradient(listOf(Color(0xFFFFC85A).copy(alpha = glow), Color(0xFFFF7A3D).copy(alpha = glow * 0.3f)), Offset.Zero, layout.size),
+        blendMode = BlendMode.Plus,
+    )
+}
+
+/**
+ * Felder, die sich freikaufen lassen: gestrichelt, mit „+“ und dem Preis des nächsten Feldes. Ist es bezahlbar,
+ * pulsieren sie hell in der Farbe der Galaxie, sonst bleiben sie gedämpft.
+ */
+private fun DrawScope.drawFrontier(
+    state: GameState,
+    frontier: Set<Hex>,
+    layout: HexLayout,
+    color: Color,
+    affordable: Boolean,
+    price: TextLayoutResult?,
+    clock: Float,
+) {
+    if (frontier.isEmpty()) return
+    val path = layout.hexPath()
+    val dashed = Stroke(width = 1.5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+    val pulse = if (affordable) 0.75f + 0.25f * sin(clock * 2.4f) else 1f
+    val arm = layout.size * 0.16f
+    // Mit Preis rückt das Plus etwas nach oben, damit beides ins Feld passt.
+    val plusY = if (price != null) -layout.size * 0.12f else 0f
+    val plusColor = if (affordable) color.copy(alpha = 0.8f * pulse) else Palette.TextFaint.copy(alpha = 0.35f)
+    for (hex in frontier) {
+        val c = layout.center(hex)
+        translate(c.x, c.y) {
+            drawPath(path, color.copy(alpha = if (affordable) 0.035f else 0.015f))
+            val enrichment = state.enrichment[hex] ?: 0.0
+            if (enrichment > 0.0) drawEnrichment(path, layout, enrichment, clock, hex, 0.4f)
+            drawPath(path, color.copy(alpha = if (affordable) 0.38f * pulse else 0.14f), style = dashed)
+            drawLine(plusColor, Offset(-arm, plusY), Offset(arm, plusY), strokeWidth = 2f)
+            drawLine(plusColor, Offset(0f, plusY - arm), Offset(0f, plusY + arm), strokeWidth = 2f)
+            if (price != null) {
+                drawText(price, topLeft = Offset(-price.size.width / 2f, layout.size * 0.32f - price.size.height / 2f))
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawSelection(center: Offset, layout: HexLayout, clock: Float, color: Color) {
     val path = layout.hexPath(0.98f)
     val pulse = 0.6f + 0.4f * sin(clock * 5f)
     translate(center.x, center.y) {
-        drawPath(path, Color(0xFF9EE8FF).copy(alpha = 0.9f * pulse), style = Stroke(width = 2.5f))
-        drawPath(path, Color(0xFF9EE8FF).copy(alpha = 0.12f * pulse), blendMode = BlendMode.Plus)
+        drawPath(path, color.copy(alpha = 0.9f * pulse), style = Stroke(width = 2.5f))
+        drawPath(path, color.copy(alpha = 0.12f * pulse), blendMode = BlendMode.Plus)
+    }
+}
+
+/** Warp nach einem Galaxiewechsel: Lichtstreifen vom Garten nach außen und ein kurzer Blitz. [p] läuft von 0 bis 1. */
+private fun DrawScope.drawWarp(p: Float, center: Offset, color: Color) {
+    val fade = (1f - p) * (1f - p)
+    drawRect(color.copy(alpha = 0.22f * fade), blendMode = BlendMode.Plus)
+    val reach = size.maxDimension
+    for (k in 0 until 14) {
+        val a = k * 2f * PI.toFloat() / 14f + seedOf(Hex(k, 3)) * 0.4f
+        val dir = Offset(cos(a), sin(a))
+        val from = center + dir * reach * (0.05f + 0.6f * p)
+        val to = center + dir * reach * (0.25f + 0.9f * p)
+        drawLine(
+            Brush.linearGradient(listOf(Color.Transparent, color.copy(alpha = 0.5f * (1f - p))), from, to),
+            from, to, strokeWidth = 3f * density, blendMode = BlendMode.Plus,
+        )
     }
 }
 

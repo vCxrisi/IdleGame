@@ -142,6 +142,10 @@ Falls Schritt 4 nicht möglich ist, sind statt des automatischen Signierens vier
 
 ## Später: Ingame-Käufe
 
-Die sechs Produkt-IDs aus der README legst du unter App Store Connect → die App → **In-App-Käufe** an. Kristalle sind Verbrauchsartikel, Starterpaket und Sternenwanderer Nicht-Verbrauchsartikel. Außerdem muss der Vertrag „Kostenpflichtige Apps“ akzeptiert sein.
+Die sieben Produkt-IDs aus der README legst du unter App Store Connect → die App → **In-App-Käufe** an. Kristalle sind Verbrauchsartikel, Starterpaket, Sternenwanderer und Galaxie-Pionier Nicht-Verbrauchsartikel. Außerdem muss der Vertrag „Kostenpflichtige Apps“ akzeptiert sein.
 
 Ohne diese Produkte zeigt der Shop in TestFlight „Store lädt …“. Der Upload selbst funktioniert trotzdem.
+
+## Hinweis zum Spielstand
+
+Seit den parallelen Galaxien speichert das Spiel unter `sternengarten.save.v3`. Den früheren Stand (`…v1`) liest es nur noch beim ersten Start ein und schreibt ihn nie mehr. Installiert ein Tester einen älteren Build, sieht er dort den Stand von vor dem Update; der neue Stand bleibt unberührt.

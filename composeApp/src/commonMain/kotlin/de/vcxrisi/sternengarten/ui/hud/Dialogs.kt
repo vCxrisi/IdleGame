@@ -167,3 +167,24 @@ fun BoxScope.RepairDialog(report: RepairReport, onDismiss: () -> Unit) {
         }
     }
 }
+
+/** Hinweis, wenn der aktuelle Spielstand unlesbar war und ein älterer geladen wurde. */
+@Composable
+fun BoxScope.LoadNoticeDialog(onDismiss: () -> Unit) {
+    Scrim(null, Modifier.fillMaxSize())
+    GlassPanel(
+        Modifier.align(Alignment.Center).widthIn(max = 420.dp).padding(20.dp),
+        strong = true,
+        tint = Palette.Danger.copy(alpha = 0.7f),
+        padding = PaddingValues(20.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Txt("Spielstand nicht lesbar", Type.Title, align = TextAlign.Center)
+            Txt(
+                "Spielstand konnte nicht gelesen werden – ein älterer Stand wurde geladen. Die Sicherung bleibt erhalten.",
+                Type.Body, align = TextAlign.Center,
+            )
+            GlowButton("Weiter", onDismiss, Modifier.fillMaxWidth(), color = Palette.Danger)
+        }
+    }
+}

@@ -12,6 +12,8 @@ enum class StarType(
     /** Lebensdauer in Sekunden, `null` für ewige Sterne. */
     val lifespan: Double?,
     val fate: StarFate,
+    /** Wächst nur in dieser Galaxieart; `null` für Sterne, die es überall gibt. */
+    val exclusiveTo: GalaxyKind? = null,
 ) {
     RED_DWARF(
         "Roter Zwerg",
@@ -72,8 +74,34 @@ enum class StarType(
         "Leuchtet über die ganze Galaxie: +3 % Produktion für alle Sterne je Stern im Garten.",
         baseCost = 1_500_000_000.0, costGrowth = 1.8, baseOutput = 2_000_000.0,
         lifespan = null, fate = StarFate.ETERNAL,
+    ),
+
+    // ---- Nur in ihrer Galaxieart. Die Preise gelten für K = 1 und werden dort wie alle Preise ×K genommen.
+    FROST_CRYSTAL(
+        "Eiskristall",
+        "Liebt Symmetrie: +30 % für jede Drehlage um das Zentrum (60°, 120°, …), auf der ebenfalls ein Stern steht. Nur in der Frostgalaxie.",
+        baseCost = 120_000.0, costGrowth = 1.30, baseOutput = 900.0,
+        lifespan = null, fate = StarFate.ETERNAL, exclusiveTo = GalaxyKind.FROST,
+    ),
+    EMBER_STAR(
+        "Glutstern",
+        "Glüht im Nest: +35 % für jeden weiteren Glutstern seiner zusammenhängenden Gruppe. Explodiert als Supernova – je größer das Nest, desto mehr Elemente. Nur in der Glutgalaxie.",
+        baseCost = 4_000_000.0, costGrowth = 1.35, baseOutput = 15_000.0,
+        lifespan = 300.0, fate = StarFate.SUPERNOVA, exclusiveTo = GalaxyKind.EMBER,
+    ),
+    AURORA_STAR(
+        "Polarlichtstern",
+        "Bricht das Licht: +35 % für jede verschiedene Sternart unter seinen Nachbarn. Nur in der Polarlichtgalaxie.",
+        baseCost = 30_000_000.0, costGrowth = 1.40, baseOutput = 80_000.0,
+        lifespan = null, fate = StarFate.ETERNAL, exclusiveTo = GalaxyKind.AURORA,
+    ),
+    SHADOW_STAR(
+        "Schattenstern",
+        "Lebt am Rand der Leere: +60 % für jedes angrenzende Feld, das nicht zu deinem Garten gehört. Nur in der Schattengalaxie.",
+        baseCost = 600_000_000.0, costGrowth = 1.60, baseOutput = 1_000_000.0,
+        lifespan = null, fate = StarFate.ETERNAL, exclusiveTo = GalaxyKind.SHADOW,
     );
 
-    /** Ab diesem Sternenstaub-Stand wird die Sternart freigeschaltet. */
+    /** Ab diesem Sternenstaub-Stand wird die Sternart freigeschaltet (in anderen Galaxiearten ×K, siehe Balance.unlockThreshold). */
     val unlockAt: Double get() = baseCost * 0.4
 }

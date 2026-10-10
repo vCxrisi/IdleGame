@@ -8,6 +8,9 @@ import de.vcxrisi.sternengarten.game.model.LoginReward
 import de.vcxrisi.sternengarten.game.model.Metric
 import de.vcxrisi.sternengarten.game.model.Mission
 import de.vcxrisi.sternengarten.game.model.StarType
+import de.vcxrisi.sternengarten.game.model.hasCollapsed
+import de.vcxrisi.sternengarten.game.model.projected
+import de.vcxrisi.sternengarten.game.model.runKinds
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.log10
@@ -34,6 +37,10 @@ class ProgressionSystem(private val random: Random) {
         Metric.STAR_TYPES -> state.unlocked.size.toDouble()
         Metric.ARTIFACTS -> state.artifacts.count { it.value > 0 }.toDouble()
         Metric.CAPSULES -> state.stats.capsulesOpened.toDouble()
+        Metric.FIELDS_BOUGHT -> state.stats.fieldsBought.toDouble()
+        Metric.GALAXIES -> (1 + state.parked.size).toDouble()
+        Metric.BRIDGES -> state.bridges.count { it.built }.toDouble()
+        Metric.KINDS_COLLAPSED -> state.runKinds().count { state.hasCollapsed(it) }.toDouble()
     }
 
     // ------------------------------------------------------------ Erfolge
@@ -84,7 +91,7 @@ class ProgressionSystem(private val random: Random) {
             capsules = state.capsules + reward.capsules,
             stardust = state.stardust + warp,
             runStardust = state.runStardust + warp,
-            totalStardust = state.totalStardust + warp,
+            totalStardust = state.totalStardust + Balance.normalizedDust(state, warp),
         )
         return Triple(next, reward, warp)
     }
@@ -93,15 +100,17 @@ class ProgressionSystem(private val random: Random) {
 
     fun rollMissions(state: GameState, day: Long): List<Mission> {
         val dayRandom = Random(day * 7919 + 17)
-        val rate = BoardAnalyzer.analyze(state).totalRate
         val candidates = buildList {
             add(Metric.STARS_PLANTED)
             add(Metric.LEVEL_UPS)
             add(Metric.COMETS)
             add(Metric.TOTAL_STARDUST)
             add(Metric.EVENTS)
+            add(Metric.FIELDS_BOUGHT)
             if (StarType.BLUE_GIANT in state.unlocked) add(Metric.SUPERNOVAS)
             if (StarType.BLACK_HOLE in state.unlocked) add(Metric.BLACK_HOLE_RELEASES)
+            // Laufen mehrere Galaxien, ist ein Urknall am Tag gut zu schaffen.
+            if (state.parked.isNotEmpty()) add(Metric.BIG_BANGS)
         }.shuffled(dayRandom).take(3)
         return candidates.map { metric ->
             val (target, crystals) = when (metric) {
@@ -111,11 +120,21 @@ class ProgressionSystem(private val random: Random) {
                 Metric.SUPERNOVAS -> dayRandom.nextInt(2, 6).toDouble() to 15
                 Metric.BLACK_HOLE_RELEASES -> dayRandom.nextInt(1, 4).toDouble() to 15
                 Metric.EVENTS -> 1.0 to 10
-                else -> roundNice(max(500.0, rate * 900.0)) to 10
+                Metric.FIELDS_BOUGHT -> dayRandom.nextInt(4, 11).toDouble() to 10
+                Metric.BIG_BANGS -> 1.0 to 20
+                // Eine Viertelstunde Produktion aller Galaxien, in Sternenstaub-Wert wie die Messgröße selbst.
+                Metric.TOTAL_STARDUST -> roundNice(max(500.0, normalizedRate(state) * 900.0)) to 10
+                else -> 1.0 to 10
             }
             Mission(metric, target, metric(state, metric), crystals)
         }
     }
+
+    /** Eigene Produktion aller Galaxien pro Sekunde, umgerechnet in Sternenstaub (Staub ÷ K). */
+    private fun normalizedRate(state: GameState): Double =
+        state.runKinds().mapNotNull { state.projected(it) }.sumOf { view ->
+            BoardAnalyzer.analyze(view).totalRate * view.law.onlineMult / view.activeGalaxy.costScale
+        }
 
     fun missionProgress(state: GameState, mission: Mission): Double =
         (metric(state, mission.metric) - mission.baseline).coerceAtLeast(0.0)
@@ -132,19 +151,29 @@ class ProgressionSystem(private val random: Random) {
 
     // ------------------------------------------------------------ Galaxie-Ziele
 
+    /** Drei Ziele für den aktuellen Zyklus der aktiven Galaxie; Staubziele wachsen mit K, die Belohnung mit der Galaxieart. */
     fun rollGalaxyGoals(state: GameState): List<GalaxyGoal> {
         val g = state.galaxyNumber
-        val darkMatter = ceil((g + 1) / 2.0)
-        return GoalKind.entries.shuffled(random).take(3).map { kind ->
-            val target = when (kind) {
-                GoalKind.RUN_STARDUST -> 2e6 * 5.0.pow(g - 1)
-                GoalKind.STARS_AT_ONCE -> min(12.0 + 4 * (g - 1), 60.0)
+        val kind = state.activeGalaxy
+        val k = kind.costScale
+        val maxFields = Balance.maxFieldCount(state.law).toDouble()
+        val darkMatter = ceil((g + 1) / 2.0 * kind.goalDarkMatterMult)
+        // Die besondere Sternart erst als Ziel, wenn sie schon freigeschaltet ist – sonst bleibt es unerreichbar.
+        val exclusiveReady = kind.exclusiveStar?.let { it in state.unlocked } == true
+        return GoalKind.entries.filter { it != GoalKind.EXCLUSIVE_STARS || exclusiveReady }.shuffled(random).take(3).map { goal ->
+            val target = when (goal) {
+                GoalKind.RUN_STARDUST -> 2e6 * 5.0.pow(g - 1) * k
+                GoalKind.STARS_AT_ONCE -> minOf(12.0 + 4 * (g - 1), 60.0, maxFields)
                 GoalKind.RUN_SUPERNOVAS -> 3.0 + 2 * g
                 GoalKind.STAR_LEVEL -> 15.0 + 5 * g
                 GoalKind.ACTIVE_CONSTELLATIONS -> min(3.0 + g / 2, 8.0)
-                GoalKind.PRODUCTION_RATE -> 500.0 * 8.0.pow(g - 1)
+                GoalKind.PRODUCTION_RATE -> 500.0 * 8.0.pow(g - 1) * k
+                GoalKind.FIELDS_OWNED ->
+                    min(Balance.startFieldCount(state, kind, state.law) + 6.0 + 3 * g, maxFields)
+                GoalKind.EXCLUSIVE_STARS -> min(1.0 + g / 3, 4.0)
+                GoalKind.WHITE_DWARFS -> min(2.0 + g, 10.0)
             }
-            GalaxyGoal(kind, target, darkMatter, crystals = 15)
+            GalaxyGoal(goal, target, darkMatter, crystals = 15)
         }
     }
 
@@ -155,6 +184,9 @@ class ProgressionSystem(private val random: Random) {
         GoalKind.STAR_LEVEL -> (state.stars.values.maxOfOrNull { it.level } ?: 0).toDouble()
         GoalKind.ACTIVE_CONSTELLATIONS -> analysis.activeKinds.size.toDouble()
         GoalKind.PRODUCTION_RATE -> analysis.totalRate * state.law.onlineMult
+        GoalKind.FIELDS_OWNED -> state.ownedFields.size.toDouble()
+        GoalKind.EXCLUSIVE_STARS -> state.stars.values.count { it.type.exclusiveTo == state.activeGalaxy }.toDouble()
+        GoalKind.WHITE_DWARFS -> state.stars.values.count { it.whiteDwarf }.toDouble()
     }
 
     /** Gibt den neuen Zustand zurück und ob damit alle Ziele der Galaxie erfüllt sind. */

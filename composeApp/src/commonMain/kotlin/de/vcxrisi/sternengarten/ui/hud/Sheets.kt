@@ -32,19 +32,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.vcxrisi.sternengarten.game.engine.Balance
+import de.vcxrisi.sternengarten.game.engine.GalaxyOfflineLine
 import de.vcxrisi.sternengarten.game.engine.OfflineReport
 import de.vcxrisi.sternengarten.game.model.Currency
+import de.vcxrisi.sternengarten.game.model.GalaxyKind
 import de.vcxrisi.sternengarten.game.model.GalaxyLaw
+import de.vcxrisi.sternengarten.game.model.GameState
+import de.vcxrisi.sternengarten.game.model.runKinds
+import de.vcxrisi.sternengarten.game.model.runOf
 import de.vcxrisi.sternengarten.game.model.Upgrade
 import de.vcxrisi.sternengarten.ui.GameController
 import de.vcxrisi.sternengarten.ui.Sheet
 import de.vcxrisi.sternengarten.ui.render.drawNebula
 import de.vcxrisi.sternengarten.ui.theme.Palette
 import de.vcxrisi.sternengarten.ui.theme.Type
+import de.vcxrisi.sternengarten.ui.theme.formatDecimal
 import de.vcxrisi.sternengarten.ui.theme.formatDuration
 import de.vcxrisi.sternengarten.ui.theme.formatNumber
-import kotlin.math.pow
+import de.vcxrisi.sternengarten.ui.theme.galaxyColor
 import kotlin.math.sin
 
 /** Rahmen für alle Panels, die von unten hereinkommen. */
@@ -95,19 +102,19 @@ fun BoxScope.ResearchSheet(controller: GameController) {
     val state = controller.state
     BottomSheet("Forschung", Palette.Elements, { controller.sheet = Sheet.NONE }) {
         for (currency in Currency.entries) {
-            val upgrades = Upgrade.entries.filter { it.currency == currency }
-            if (currency == Currency.DARK_MATTER && state.darkMatter <= 0 && state.galaxyNumber == 1) {
-                SectionTitle("Dunkle Materie – permanent", Palette.DarkMatter)
+            val upgrades = Upgrade.entries.filter { it.currency == currency && !it.retired }
+            if (currency == Currency.DARK_MATTER && state.darkMatter <= 0 && state.stats.bigBangs == 0L && state.parked.isEmpty()) {
+                SectionTitle("Dunkle Materie – für alle Galaxien", Palette.DarkMatter)
                 Txt("Löse deinen ersten Urknall aus, um permanente Forschung freizuschalten.", Type.Body)
                 continue
             }
             SectionTitle(
                 when (currency) {
-                    Currency.STARDUST -> "Sternenstaub"
+                    Currency.STARDUST -> "${state.activeGalaxy.dustName} – nur ${state.galaxyName}"
                     Currency.ELEMENTS -> "Elemente – aus Supernovas"
-                    Currency.DARK_MATTER -> "Dunkle Materie – permanent"
+                    Currency.DARK_MATTER -> "Dunkle Materie – für alle Galaxien"
                 },
-                Palette.currency(currency),
+                currencyColor(state, currency),
             )
             for (upgrade in upgrades) UpgradeRow(controller, upgrade)
         }
@@ -119,10 +126,9 @@ private fun UpgradeRow(controller: GameController, upgrade: Upgrade) {
     val state = controller.state
     val level = state.level(upgrade)
     val max = upgrade.maxLevel
-    val maxed = (max != null && level >= max) ||
-        (upgrade == Upgrade.NEBULA_EXPANSION && Balance.gardenRadius(state) >= Balance.MAX_RADIUS)
+    val maxed = max != null && level >= max
     val cost = Balance.upgradeCost(state, upgrade)
-    val color = Palette.currency(upgrade.currency)
+    val color = currencyColor(state, upgrade.currency)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Txt(upgrade.displayName, Type.Label)
@@ -140,34 +146,49 @@ private fun UpgradeRow(controller: GameController, upgrade: Upgrade) {
     }
 }
 
+/** Farbe einer Währung; Staub trägt die Farbe der aktiven Galaxie. */
+private fun currencyColor(state: GameState, currency: Currency): Color =
+    if (currency == Currency.STARDUST) galaxyColor(state.activeGalaxy) else Palette.currency(currency)
+
 @Composable
 fun BoxScope.BigBangSheet(controller: GameController) {
     val state = controller.state
+    val kind = state.activeGalaxy
+    val dust = kind.dustName
     val gain = Balance.darkMatterGain(state)
     val nextAt = Balance.runStardustForDarkMatter(state, gain + 1)
-    BottomSheet("Urknall", Palette.DarkMatter, { controller.sheet = Sheet.NONE }) {
+    BottomSheet("Urknall · ${state.galaxyName}", Palette.DarkMatter, { controller.sheet = Sheet.NONE }) {
         Txt(
-            "Lass diese Galaxie in sich zusammenstürzen und gebäre eine neue – mit anderen Naturgesetzen. " +
-                "Sterne, Sternenstaub, Elemente und Forschung vergehen. " +
-                "Dunkle Materie, permanente Forschung, freigeschaltete Sternarten und entdeckte Sternbilder bleiben.",
+            "Lass ${state.galaxyName} in sich zusammenstürzen und gebäre sie neu – mit anderen Naturgesetzen. " +
+                "Sterne, Felder, $dust, Elemente und Forschung dieser Galaxie vergehen." +
+                (if (state.parked.isNotEmpty()) " Deine anderen Galaxien wachsen ungestört weiter." else "") +
+                " Dunkle Materie, permanente Forschung, Sternarten und Sternbilder bleiben.",
             Type.Body,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatBlock("Du erhältst", formatNumber(gain), Palette.DarkMatter, Modifier.weight(1f))
             StatBlock("Nächste bei", formatNumber(nextAt), Palette.TextDim, Modifier.weight(1f))
         }
+        if (kind.darkMatterMult != 1.0) {
+            Txt(
+                "Ertrag dieser Galaxie ×${formatDecimal(kind.darkMatterMult, if (kind.darkMatterMult % 1.0 == 0.0) 0 else 1)} – " +
+                    "dafür kostet hier alles ×${formatDecimal(kind.costScale, 0)}.",
+                Type.Small, color = galaxyColor(kind),
+            )
+        }
         Txt(
             "Jede ungenutzte Dunkle Materie gibt +${(Balance.DARK_MATTER_BONUS * 100).toInt()} % Produktion. " +
-                "In dieser Galaxie verdient: ${formatNumber(state.runStardust)} Sternenstaub.",
+                "In dieser Galaxie verdient: ${formatNumber(state.runStardust)} $dust.",
             Type.Small,
         )
         GlowButton(
-            if (gain >= 1) "Urknall auslösen" else "Noch nicht genug Sternenstaub",
+            if (gain >= 1) "Urknall auslösen" else "Noch nicht genug $dust",
             { controller.bigBang() },
             Modifier.fillMaxWidth(),
             color = Palette.DarkMatter,
             enabled = gain >= 1,
-            subtitle = if (gain >= 1) "+${formatNumber(gain)} Dunkle Materie" else "Benötigt 1M in dieser Galaxie",
+            subtitle = if (gain >= 1) "+${formatNumber(gain)} Dunkle Materie"
+            else "Benötigt ${formatNumber(Balance.runStardustForDarkMatter(state, 1.0))} $dust in dieser Galaxie",
         )
     }
 }
@@ -183,12 +204,14 @@ private fun StatBlock(label: String, value: String, color: Color, modifier: Modi
 }
 
 @Composable
-fun BoxScope.OfflineDialog(report: OfflineReport, onDismiss: () -> Unit) {
+fun BoxScope.OfflineDialog(report: OfflineReport, active: GalaxyKind, time: Float, onDismiss: () -> Unit) {
+    val several = report.galaxies.size > 1
+    val activeColor = galaxyColor(active)
     Scrim(onDismiss, Modifier.fillMaxSize())
     GlassPanel(
-        Modifier.align(Alignment.Center).widthIn(max = 380.dp).padding(24.dp),
+        Modifier.align(Alignment.Center).widthIn(max = 400.dp).padding(24.dp),
         strong = true,
-        tint = Palette.Stardust.copy(alpha = 0.6f),
+        tint = (if (several) Palette.DarkMatter else activeColor).copy(alpha = 0.6f),
         padding = PaddingValues(20.dp),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -199,29 +222,86 @@ fun BoxScope.OfflineDialog(report: OfflineReport, onDismiss: () -> Unit) {
                 } else formatDuration(report.seconds),
                 Type.Small, align = TextAlign.Center,
             )
-            Txt("+${formatNumber(report.stardust)}", Type.Huge, color = Palette.Stardust)
-            Txt("Sternenstaub", Type.Small)
-            if (report.elements > 0) Txt("+${formatNumber(report.elements)} Elemente aus ${report.supernovas} Supernovas", Type.Label, color = Palette.Elements)
-            GlowButton("Weiter", onDismiss, Modifier.fillMaxWidth(), color = Palette.Stardust)
+            if (several) {
+                // Eine Zeile je Galaxie – jede mit ihrem eigenen Staub.
+                for (line in report.galaxies) OfflineGalaxyRow(line, time)
+            } else if (report.stardust > 0.0) {
+                Txt("+${formatNumber(report.stardust)}", Type.Huge, color = activeColor)
+                Txt(active.dustName, Type.Small)
+                if (report.elements > 0) Txt("+${formatNumber(report.elements)} Elemente aus ${report.supernovas} Supernovas", Type.Label, color = Palette.Elements)
+            }
+            for (kind in report.unlocked) {
+                Txt("Neue Galaxie entstanden: ${kind.displayName}", Type.Label, color = Palette.Success, align = TextAlign.Center)
+            }
+            for (bridge in report.bridgesCompleted) {
+                Txt("Sternenbrücke fertig: ${bridge.from.displayName} → ${bridge.to.displayName}", Type.Label, color = Palette.Accent, align = TextAlign.Center)
+            }
+            GlowButton("Weiter", onDismiss, Modifier.fillMaxWidth(), color = if (several) Palette.DarkMatter else activeColor)
+        }
+    }
+}
+
+@Composable
+private fun OfflineGalaxyRow(line: GalaxyOfflineLine, time: Float) {
+    val color = galaxyColor(line.kind)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        GalaxyOrb(line.kind, time, 26.dp, ring = 0.45f)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Txt(line.name, Type.Label, maxLines = 1)
+            Txt(
+                when {
+                    line.paused -> "pausiert – Naturgesetze wählen"
+                    line.elements > 0 -> "+${formatNumber(line.elements)} Elemente aus ${line.supernovas} Supernovas"
+                    else -> line.kind.displayName
+                },
+                Type.Small, color = if (line.paused) Palette.Boost else Palette.TextDim, maxLines = 1,
+            )
+            if (line.bridged > 0.0) Txt("+${formatNumber(line.bridged)} über Sternenbrücken", Type.Small, color = Palette.Accent, maxLines = 1)
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Txt(if (line.paused) "–" else "+${formatNumber(line.stardust + line.bridged)}", Type.Label, color = color, maxLines = 1)
+            Txt(line.kind.dustName, Type.Small.copy(fontSize = 9.sp), color = Palette.TextFaint, maxLines = 1)
         }
     }
 }
 
 @Composable
 fun GalaxySelectScreen(controller: GameController, time: Float, modifier: Modifier = Modifier) {
-    val choices = controller.state.lawChoices
+    val state = controller.state
+    val choices = state.lawChoices
+    val kind = state.activeGalaxy
+    // Eine frisch erschlossene Galaxie muss nicht sofort gewählt werden, wenn es woanders etwas zu spielen gibt.
+    val playable = state.runKinds().filter { it != kind && state.runOf(it)?.lawChoices?.isEmpty() == true }
     Box(modifier.fillMaxSize()) {
-        Canvas(Modifier.fillMaxSize()) { drawNebula(time, 270f + 40f * sin(time * 0.1f), Offset.Zero) }
+        Canvas(Modifier.fillMaxSize()) { drawNebula(time, kind.hue + 40f * sin(time * 0.1f), Offset.Zero) }
         Column(
             Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Spacer(Modifier.height(24.dp))
-            Txt("URKNALL", Type.Small, color = Palette.DarkMatter)
-            Txt("Wähle die Gesetze deiner neuen Galaxie", Type.Title, align = TextAlign.Center)
-            Txt("Dunkle Materie: ${formatNumber(controller.state.darkMatter)}", Type.Label, color = Palette.DarkMatter)
+            if (state.galaxyNumber == 0) {
+                Txt("NEUE GALAXIE · ${kind.displayName.uppercase()}", Type.Small, color = galaxyColor(kind), align = TextAlign.Center)
+                Txt("Wähle die Naturgesetze von ${state.galaxyName}", Type.Title, align = TextAlign.Center)
+            } else {
+                Txt("URKNALL", Type.Small, color = Palette.DarkMatter)
+                Txt("Wähle die Gesetze deiner neuen Galaxie", Type.Title, align = TextAlign.Center)
+            }
+            Txt(
+                "Hier sammelst du ${kind.dustName}" + (kind.exclusiveStar?.let { " · exklusiv: ${it.displayName}" } ?: ""),
+                Type.Label, color = galaxyColor(kind), align = TextAlign.Center,
+            )
+            Txt("Dunkle Materie: ${formatNumber(state.darkMatter)}", Type.Label, color = Palette.DarkMatter)
             for (law in choices) LawCard(law, time) { controller.chooseGalaxy(law) }
+            if (playable.isNotEmpty()) {
+                GlowButton(
+                    "Später wählen",
+                    { controller.switchGalaxy(controller.previousGalaxy?.takeIf { it in playable } ?: playable.first()) },
+                    color = Palette.TextDim,
+                )
+            }
         }
     }
 }

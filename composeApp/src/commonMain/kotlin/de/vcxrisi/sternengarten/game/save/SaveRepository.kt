@@ -4,30 +4,34 @@ import com.russhwolf.settings.Settings
 import de.vcxrisi.sternengarten.game.model.GameState
 import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
-import kotlinx.serialization.json.Json
 
-/** Speichert den Spielstand als JSON in den plattformeigenen Einstellungen (SharedPreferences / NSUserDefaults). */
+/**
+ * Speichert den Spielstand als JSON in den plattformeigenen Einstellungen (SharedPreferences / NSUserDefaults).
+ * Schlüssel und Format stehen in [SaveFormat].
+ */
 class SaveRepository(private val settings: Settings = Settings()) {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        allowStructuredMapKeys = true
-        allowSpecialFloatingPointValues = true
-        encodeDefaults = true
+    /** Lädt den aktuellen Stand. Ist er unlesbar, wird sein Rohtext vorher gesichert (siehe [SaveFormat.choose]). */
+    fun load(): LoadResult {
+        val result = SaveFormat.choose(
+            v3 = settings.getStringOrNull(SaveFormat.KEY),
+            v1 = settings.getStringOrNull(SaveFormat.LEGACY_KEY),
+            nowMs = nowEpochMillis(),
+            keyTaken = settings::hasKey,
+        )
+        result.backup?.let { settings.putString(it.key, it.raw) }
+        return result
     }
 
-    fun load(): GameState? = settings.getStringOrNull(KEY)?.let { raw ->
-        runCatching { json.decodeFromString(GameState.serializer(), raw) }.getOrNull()
-    }
-
+    /** Schreibt nur den v3-Schlüssel; der v1-Stand bleibt für ältere Builds unverändert liegen. */
     fun save(state: GameState) {
-        settings.putString(KEY, json.encodeToString(GameState.serializer(), state))
+        settings.putString(SaveFormat.KEY, SaveFormat.encode(state))
     }
 
-    fun clear() = settings.remove(KEY)
-
-    private companion object {
-        const val KEY = "sternengarten.save.v1"
+    /** Löscht den Spielstand samt v1-Stand. Sicherungen unlesbarer Stände bleiben erhalten. */
+    fun clear() {
+        settings.remove(SaveFormat.KEY)
+        settings.remove(SaveFormat.LEGACY_KEY)
     }
 }
 

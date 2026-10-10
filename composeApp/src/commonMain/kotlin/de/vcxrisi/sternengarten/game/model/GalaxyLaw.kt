@@ -8,6 +8,7 @@ enum class GalaxyLaw(
     val hue: Float,
     val auraMult: Double = 1.0,
     val yellowAuraMult: Double = 1.0,
+    /** Negativ macht den Garten kleiner: je Ring 12 Startfelder weniger und ein Ring weniger Platz für Felder. */
     val radiusDelta: Int = 0,
     val onlineMult: Double = 1.0,
     val offlineMult: Double = 1.0,
@@ -17,6 +18,14 @@ enum class GalaxyLaw(
     val costMult: Double = 1.0,
     val constellationMult: Double = 1.0,
     val darkMatterMult: Double = 1.0,
+    /** Faktor auf den Preis neuer Felder. */
+    val fieldCostMult: Double = 1.0,
+    /** Faktor auf die Grundleistung Roter Zwerge. */
+    val redDwarfMult: Double = 1.0,
+    /** Faktor auf Sternenbrücken, die in diese Galaxie führen. */
+    val bridgeMult: Double = 1.0,
+    /** Keine Kometen und keine kosmischen Ereignisse. */
+    val quiet: Boolean = false,
 ) {
     NORMAL(
         "Vertraute Gesetze",
@@ -25,7 +34,7 @@ enum class GalaxyLaw(
     ),
     HIGH_GRAVITY(
         "Hohe Gravitation",
-        "Alle Nachbarschaftsboni wirken doppelt – doch der Nebel ist einen Ring kleiner.",
+        "Alle Nachbarschaftsboni wirken doppelt – doch der Nebel ist kleiner: 12 Startfelder weniger, höchstens 91 Felder.",
         hue = 18f, auraMult = 2.0, radiusDelta = -1,
     ),
     TIME_DILATION(
@@ -57,5 +66,25 @@ enum class GalaxyLaw(
         "Dunkler Fluss",
         "Alle Sterne leisten 20 % weniger – der nächste Urknall bringt 50 % mehr Dunkle Materie.",
         hue = 150f, onlineMult = 0.8, offlineMult = 0.8, darkMatterMult = 1.5,
+    ),
+    COSMIC_EXPANSION(
+        "Kosmische Expansion",
+        "Neue Felder kosten nur ein Viertel – doch alle Sterne leisten 15 % weniger.",
+        hue = 75f, fieldCostMult = 0.25, onlineMult = 0.85, offlineMult = 0.85,
+    ),
+    REDSHIFT(
+        "Rotverschiebung",
+        "Rote Zwerge leisten das Vierfache – doch neue Felder kosten doppelt so viel.",
+        hue = 40f, redDwarfMult = 4.0, fieldCostMult = 2.0,
+    ),
+    TIDAL_BOND(
+        "Gezeitenbund",
+        "Sternenbrücken in diese Galaxie tragen doppelt so viel – doch Sternbilder klingen nur halb so stark.",
+        hue = 248f, bridgeMult = 2.0, constellationMult = 0.5,
+    ),
+    SILENCE(
+        "Große Stille",
+        "Alle Sterne leisten 25 % mehr – doch keine Kometen, keine Ereignisse und keine Sternenbrücke erreicht diese Galaxie.",
+        hue = 115f, onlineMult = 1.25, offlineMult = 1.25, bridgeMult = 0.0, quiet = true,
     ),
 }

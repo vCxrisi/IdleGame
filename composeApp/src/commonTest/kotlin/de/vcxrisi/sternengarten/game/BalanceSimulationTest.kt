@@ -4,7 +4,6 @@ import de.vcxrisi.sternengarten.game.engine.Balance
 import de.vcxrisi.sternengarten.game.engine.GameEngine
 import de.vcxrisi.sternengarten.game.engine.isSafe
 import de.vcxrisi.sternengarten.game.model.GameState
-import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.Upgrade
 import de.vcxrisi.sternengarten.ui.theme.formatNumber
@@ -17,6 +16,12 @@ import kotlin.test.assertTrue
  * Ein einfacher, gieriger Bot spielt zehn Galaxien je eine Stunde. Unter dem alten Balancing wuchs die
  * Dunkle Materie doppelt-exponentiell (ein echter Spielstand erreichte in Galaxie 6 ~10^137 und lief über).
  * Der Test stellt sicher, dass das Wachstum jetzt abbremst und alle Werte endlich bleiben.
+ *
+ * Aufgezeichneter DM-Gewinn je Galaxie (Seed 11):
+ * 25,6K · 2,03M · 22,5M · 80,8M · 255M · 420M · 745M · 1,02Mrd · 1,33Mrd · 2,10Mrd.
+ * Mit dem früheren Ring-Kauf waren es 79 · 192 · 1,44K · 40,7K · 678K · 5,72M · 35,8M · 62,4M · 156M · 385M:
+ * Damals füllte der Bot jeden neuen Ring sofort mit billigen Sternen, jetzt kauft er Feld für Feld dazu,
+ * sobald weniger als zwei frei sind, und setzt jeweils den teuersten bezahlbaren Stern.
  */
 class BalanceSimulationTest {
 
@@ -28,15 +33,26 @@ class BalanceSimulationTest {
         StarType.BINARY, StarType.YELLOW_STAR, StarType.RED_DWARF,
     )
 
+    /** Permanente Forschung, die der Bot nach jedem Urknall kauft – die der Sternenbrücken und Felder lässt er aus. */
+    private val permanentUpgrades = listOf(
+        Upgrade.DARK_ENERGY, Upgrade.STARDUST_MEMORY, Upgrade.DEEP_SLEEP, Upgrade.PRIMORDIAL_NEBULA, Upgrade.COMET_LURE,
+    )
+
     private fun act(start: GameState): GameState {
         var state = start
         // Forschung kaufen, solange es geht.
-        for (upgrade in Upgrade.entries.filter { !it.permanent }) {
+        for (upgrade in Upgrade.entries.filter { !it.permanent && !it.retired }) {
             repeat(20) { engine.buyUpgrade(state, upgrade)?.let { state = it } ?: return@repeat }
         }
+        // Felder dazukaufen, bis wieder zwei frei sind – symmetrisch von innen nach außen.
+        for (hex in Balance.FIELD_ORDER) {
+            if (state.ownedFields.count { it !in state.stars } >= 2) break
+            if (hex in state.ownedFields) continue
+            state = engine.buyField(state, hex)?.first ?: break
+        }
         // Leere Felder bepflanzen.
-        for (hex in Hex.area(Balance.gardenRadius(state))) {
-            if (hex in state.stars) continue
+        for (hex in Balance.FIELD_ORDER) {
+            if (hex !in state.ownedFields || hex in state.stars) continue
             val type = plantable.firstOrNull { engine.canPlant(state, hex, it) } ?: break
             state = engine.plant(state, hex, type) ?: state
         }
@@ -72,7 +88,7 @@ class BalanceSimulationTest {
                     "Dunkle Energie=${state.level(Upgrade.DARK_ENERGY)}, höchste Stufe=${state.stars.values.maxOfOrNull { it.level }}",
             )
             state = engine.bigBang(state) ?: return@repeat
-            for (upgrade in Upgrade.entries.filter { it.permanent }) {
+            for (upgrade in permanentUpgrades) {
                 repeat(50) { engine.buyUpgrade(state, upgrade)?.let { state = it } ?: return@repeat }
             }
             state = engine.chooseGalaxy(state, state.lawChoices.first()) ?: state

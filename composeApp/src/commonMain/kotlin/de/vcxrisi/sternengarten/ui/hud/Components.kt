@@ -20,7 +20,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -121,6 +124,57 @@ fun GlowButton(
         }
     }
 }
+
+/**
+ * Knopf, der erst nach einer Rückfrage auslöst: Der erste Tipp zeigt [CONFIRM_SECONDS] lang „Bestätigen?“,
+ * erst ein zweiter Tipp in dieser Zeit ruft [onConfirm] auf. [clock] ist die Animationsuhr des Controllers.
+ */
+@Composable
+fun ConfirmButton(
+    label: String,
+    color: Color,
+    clock: Float,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    subtitle: String? = null,
+    compact: Boolean = true,
+) {
+    var armedAt by remember { mutableFloatStateOf(-10f) }
+    val armed = enabled && clock - armedAt < CONFIRM_SECONDS
+    GlowButton(
+        if (armed) "Bestätigen?" else label,
+        {
+            if (armed) {
+                armedAt = -10f
+                onConfirm()
+            } else {
+                armedAt = clock
+            }
+        },
+        modifier,
+        color = color,
+        enabled = enabled,
+        subtitle = subtitle,
+        compact = compact,
+    )
+}
+
+/** Schutz vor versehentlichem Kristall-Ausgeben – für jedes „Sofort fertig“. */
+@Composable
+fun ConfirmCrystalButton(
+    label: String,
+    price: Int,
+    affordable: Boolean,
+    clock: Float,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ConfirmButton(label, Palette.Crystal, clock, onConfirm, modifier, enabled = affordable, subtitle = "◆ $price")
+}
+
+/** So lange wartet ein [ConfirmButton] auf den zweiten Tipp. */
+const val CONFIRM_SECONDS = 3f
 
 /** Kleines, animiertes Sternsymbol für Bauleiste und Listen. */
 @Composable

@@ -71,6 +71,10 @@ private fun sizeFor(visual: StarVisual): Float {
         StarType.MAGNETAR -> 0.24f
         StarType.NEBULA_NURSERY -> 0.30f
         StarType.QUASAR -> 0.26f
+        StarType.FROST_CRYSTAL -> 0.24f
+        StarType.EMBER_STAR -> 0.30f
+        StarType.AURORA_STAR -> 0.27f
+        StarType.SHADOW_STAR -> 0.28f
     }
     val levelBoost = 1f + min(0.25f, (visual.level - 1) * 0.01f)
     val phase = when (visual.phase) {

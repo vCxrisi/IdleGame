@@ -32,7 +32,7 @@ class ShopSystem(private val random: Random) {
         return state.copy(
             stardust = state.stardust + amount,
             runStardust = state.runStardust + amount,
-            totalStardust = state.totalStardust + amount,
+            totalStardust = state.totalStardust + Balance.normalizedDust(state, amount),
         ) to amount
     }
 
@@ -117,6 +117,8 @@ class ShopSystem(private val random: Random) {
         if (product == StoreProduct.STARTER_PACK) {
             next = next.copy(ownedThemes = next.ownedThemes + NebulaTheme.ROYAL_GOLD)
         }
+        // Die zusätzlichen Startfelder gibt es sofort in jeder Galaxie – auch beim Wiederherstellen.
+        if (product == StoreProduct.GALAXY_PIONEER) next = GalaxyFactory.extendStartingFields(next)
         return next
     }
 }

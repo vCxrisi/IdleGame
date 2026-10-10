@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import de.vcxrisi.sternengarten.game.model.Achievement
 import de.vcxrisi.sternengarten.game.model.ConstellationKind
+import de.vcxrisi.sternengarten.game.model.GalaxyKind
 import de.vcxrisi.sternengarten.game.model.GoalKind
 import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.LoginReward
@@ -163,7 +164,8 @@ private fun GalaxyGoalsTab(controller: GameController) {
             }
         }
         ProgressRow(
-            title = "${goal.kind.label}: ${value(goal.target)}" + if (goal.kind == GoalKind.PRODUCTION_RATE) "/s" else "",
+            title = "${goal.kind.label.replace("Sternenstaub", state.activeGalaxy.dustName)}: ${value(goal.target)}" +
+                if (goal.kind == GoalKind.PRODUCTION_RATE) "/s" else "",
             detail = if (goal.claimed) "Erreicht · +${formatNumber(goal.darkMatter)} Dunkle Materie erhalten"
             else "${value(progress.coerceAtMost(goal.target))} / ${value(goal.target)} · +${formatNumber(goal.darkMatter)} DM · +${goal.crystals} Kristalle",
             fraction = if (goal.claimed) 1f else (progress / goal.target).toFloat(),
@@ -175,6 +177,15 @@ private fun GalaxyGoalsTab(controller: GameController) {
     }
     if (state.galaxyGoals.isNotEmpty() && state.galaxyGoals.all { it.claimed }) {
         Txt("Alle Ziele dieser Galaxie erfüllt! Zeit für den nächsten Urknall?", Type.Label, color = Palette.Success)
+    }
+    // Ziele geparkter Galaxien lassen sich nur dort abholen – wenigstens Bescheid geben.
+    val elsewhere = controller.claimableByGalaxy.filterKeys { it != state.activeGalaxy }.filterValues { it > 0 }
+    if (elsewhere.isNotEmpty()) {
+        Txt(
+            "Bereit in anderen Galaxien: " + elsewhere.entries.joinToString(" · ") { "${it.key.shortName} ${it.value}" } +
+                ". Wechsle dorthin, um sie abzuholen.",
+            Type.Small, color = Palette.Success,
+        )
     }
 }
 
@@ -199,8 +210,10 @@ private fun AchievementsTab(controller: GameController) {
         val fmt = { v: Double -> if (achievement.metric == Metric.TOTAL_STARDUST) formatNumber(v) else v.toLong().toString() }
         ProgressRow(
             title = achievement.title,
-            detail = "${achievement.metric.label}: ${fmt(value.coerceAtMost(achievement.threshold))} / ${fmt(achievement.threshold)} · +${achievement.crystals} Kristalle",
-            fraction = (value / achievement.threshold).toFloat(),
+            // Erreichte Erfolge zeigen ihre Schwelle – eine später gesunkene Messgröße (etwa Brücken) wäre verwirrend.
+            detail = if (reached) "${achievement.metric.label}: ${fmt(achievement.threshold)} · +${achievement.crystals} Kristalle"
+            else "${achievement.metric.label}: ${fmt(value.coerceAtMost(achievement.threshold))} / ${fmt(achievement.threshold)} · +${achievement.crystals} Kristalle",
+            fraction = if (reached) 1f else (value / achievement.threshold).toFloat(),
             color = if (reached) Palette.Success else Palette.Crystal,
         ) {
             if (reached) Txt("✓", Type.Title, color = Palette.Success)
@@ -208,8 +221,9 @@ private fun AchievementsTab(controller: GameController) {
     }
     SectionTitle("Chronik", Palette.TextDim)
     Txt(
-        "Galaxien: ${state.galaxyNumber} · Supernovas: ${state.supernovaCount} · Kometen: ${state.stats.cometsCaught} · " +
-            "Sternenstaub insgesamt: ${formatNumber(state.totalStardust)} · Spielzeit: ${formatDuration(state.playTime)}",
+        "Galaxien: ${1 + state.parked.size}/${GalaxyKind.entries.size} · Urknalle: ${state.stats.bigBangs} · " +
+            "Felder gekauft: ${state.stats.fieldsBought} · Supernovas: ${state.supernovaCount} · Kometen: ${state.stats.cometsCaught} · " +
+            "Staub insgesamt: ${formatNumber(state.totalStardust)} · Spielzeit: ${formatDuration(state.playTime)}",
         Type.Small,
     )
 }

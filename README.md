@@ -20,15 +20,18 @@ Du pflanzt Sterne in einen lebendigen Nebel. Wie viel dein Garten produziert, h�
 
 | Mechanik | Was sie besonders macht |
 |---|---|
-| **Räumliches Idle-Spiel** | Zehn Sternarten stehen auf einem Hex-Raster und beeinflussen sich gegenseitig, siehe Tabelle unten. |
+| **Räumliches Idle-Spiel** | Vierzehn Sternarten (vier davon nur in ihrer eigenen Galaxie) stehen auf einem Hex-Raster und beeinflussen sich gegenseitig, siehe Tabelle unten. |
 | **Sternen-Lebenszyklus** | Sterne werden geboren, altern und vergehen. Blaue Riesen explodieren als Supernova, bringen Elemente und düngen die Felder ringsum. Das Säen und Ernten wird so zur Strategie. |
 | **Sternbilder** | Zehn Formen wie Linien, Dreiecke, Kronen, Himmelsleiter oder Quasar-Thron. Aktive Sternbilder stärken ihre Mitglieder, und jedes entdeckte gibt dauerhaft +10 %. |
 | **Kosmische Ereignisse** | Alle paar Minuten passiert etwas: *Sonnensturm*, *Gravitationswelle*, *Dunkle Flut*, *Sternenregen* oder ein *Meteorschauer*, dessen Meteore man antippen kann. Jedes Ereignis bringt eigene Effekte und ändert kurz die Regeln. |
+| **Fünf Galaxien gleichzeitig** | Spirale, Frost, Glut, Polarlicht und Schatten wachsen parallel. Jede sammelt ihren eigenen Staub, hat eigene Preise und kollabiert einzeln zu Dunkler Materie – spätere Galaxien sind teurer, ihr Urknall bringt dafür bis zu ×20. Neue Galaxien kosten Dunkle Materie und entstehen in Echtzeit (1 h bis 24 h). |
+| **Felder freikaufen** | Der Garten wächst Feld für Feld: Jedes angrenzende Feld lässt sich einzeln kaufen, jedes weitere kostet mehr. Wo du wächst, entscheidet über Sternbilder, Pulsar-Achsen und Schattensterne. |
+| **Sternenbrücken** | Verbinde zwei Galaxien: Ein Teil der Produktion der einen fließt als Staub in die andere – hilfreich beim Aufbau, zählt aber nicht für den Urknall. |
 | **Urknall mit neuen Naturgesetzen** | Das Prestige bringt Dunkle Materie. Jede neue Galaxie hat ein eigenes Naturgesetz, etwa *Zeitdehnung*, *Entropie* oder *Himmelsharfe*, und **drei Galaxie-Ziele**. Wer alle drei erfüllt, bekommt eine Bonus-Kapsel. |
-| **Missionen & Erfolge** | Jeden Tag gibt es drei Missionen und einen Login-Kalender mit sieben Tagen. Dazu kommen 27 Erfolge, die jeweils Kristalle und dauerhaft +2 % Produktion bringen. |
+| **Missionen & Erfolge** | Jeden Tag gibt es drei Missionen und einen Login-Kalender mit sieben Tagen. Dazu kommen 36 Erfolge, die jeweils Kristalle und dauerhaft +2 % Produktion bringen. |
 | **Artefakte** | Zehn sammelbare Artefakte in vier Seltenheiten, jedes mit dauerhaftem Bonus. Doppelte Funde erhöhen die Stufe bis 10. Die Fundchancen werden im Shop offen angezeigt. |
 | **Kosmetik** | Nebel-Themen wie Polarlicht, Glutnebel oder Königsgold sowie Funken-Stile wie Goldregen oder Regenbogen. |
-| **Kometen & Offline-Fortschritt** | Kometen fliegen ab und zu vorbei und lassen sich antippen. Die Zeit, in der du weg warst, wird vollständig simuliert, einschließlich Supernovas. |
+| **Kometen & Offline-Fortschritt** | Kometen fliegen ab und zu vorbei und lassen sich antippen. Die Zeit, in der du weg warst, wird vollständig simuliert, einschließlich Supernovas – die aktive Galaxie fein, die übrigen etwas gröber. |
 
 ### Sternarten
 
@@ -44,10 +47,14 @@ Du pflanzt Sterne in einen lebendigen Nebel. Wie viel dein Garten produziert, h�
 | **Magnetar** | +60 % für Sterne in genau zwei Feldern Abstand. |
 | **Nebelwiege** | Produziert selbst nichts. Ihre Nachbarn altern nicht mehr und bekommen +20 %. |
 | **Quasar** | +3 % für alle Sterne je Stern im Garten. |
+| ★ Eiskristall (Frost) | +30 % je 60°-Drehlage um das Zentrum, auf der ebenfalls ein Stern steht. |
+| ★ Glutstern (Glut) | +35 % je weiterem Glutstern im zusammenhängenden Nest; explodiert nach 300 s, größere Nester bringen mehr Elemente. |
+| ★ Polarlichtstern (Polarlicht) | +35 % je verschiedener Sternart unter den Nachbarn. |
+| ★ Schattenstern (Schatten) | +60 % je angrenzendem Feld, das nicht zum Garten gehört. |
 
 ## Ingame-Käufe
 
-Die Premium-Währung heißt **Sternenkristalle**. Man verdient sie auch im Spiel, über Missionen, Erfolge, Galaxie-Ziele und den Login-Bonus. Ausgeben kann man sie für Artefakt-Kapseln, Zeitsprünge, Kometenrausch und Kosmetik.
+Die Premium-Währung heißt **Sternenkristalle**. Man verdient sie auch im Spiel, über Missionen, Erfolge, Galaxie-Ziele und den Login-Bonus. Ausgeben kann man sie für Artefakt-Kapseln, Zeitsprünge, Kometenrausch, Kosmetik und um Galaxien und Sternenbrücken sofort fertigzustellen.
 
 Echtgeld-Produkte (alle vom Typ **In-App-Produkt**, keine Abos):
 
@@ -59,6 +66,7 @@ Echtgeld-Produkte (alle vom Typ **In-App-Produkt**, keine Abos):
 | `de.vcxrisi.sternengarten.crystals_3500` | 3.500 Kristalle | verbrauchbar | 24,99 € |
 | `de.vcxrisi.sternengarten.starter_pack` | 300 Kristalle, Nebel „Königsgold“, 3 Kapseln | einmalig (nicht verbrauchbar) | 2,99 € |
 | `de.vcxrisi.sternengarten.wanderer_pass` | ×2 Produktion, +4 h Offline, Kometen automatisch fangen | dauerhaft (nicht verbrauchbar) | 7,99 € |
+| `de.vcxrisi.sternengarten.galaxy_pioneer` | 6 zusätzliche Startfelder in jeder Galaxie, halbe Erschließungs- und Brückenzeit, 250 Kristalle, 2 Kapseln | dauerhaft (nicht verbrauchbar) | 4,99 € |
 
 Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur als Platzhalter, solange der Store noch lädt.
 
@@ -81,13 +89,13 @@ Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur
 
 **Google Play Console**
 1. App mit der Paket-ID `de.vcxrisi.sternengarten` anlegen und einen signierten Build in einen Test-Track hochladen, zum Beispiel „Interner Test“.
-2. Unter *Monetarisieren → Produkte → In-App-Produkte* alle sechs Produkt-IDs aus der Tabelle anlegen und aktivieren.
+2. Unter *Monetarisieren → Produkte → In-App-Produkte* alle sieben Produkt-IDs aus der Tabelle anlegen und aktivieren.
 3. Unter *Einstellungen → Lizenztests* deine Test-Konten eintragen. Käufe mit diesen Konten werden nicht abgerechnet.
 4. Die App aus dem Test-Track installieren. Käufe funktionieren nur mit einer über Play installierten App.
 
 **App Store Connect**
 1. App mit der Bundle-ID `de.vcxrisi.sternengarten` anlegen (Name in App Store Connect: „Sternengarten: Idle“).
-2. Unter *In-App-Käufe* die vier Kristall-Pakete als **Verbrauchsartikel** anlegen, Starterpaket und Sternenwanderer als **Nicht-Verbrauchsartikel**.
+2. Unter *In-App-Käufe* die vier Kristall-Pakete als **Verbrauchsartikel** anlegen, Starterpaket, Sternenwanderer und Galaxie-Pionier als **Nicht-Verbrauchsartikel**.
 3. Lokal testen: In Xcode über *File → New → File → StoreKit Configuration File* (mit „Sync with App Store Connect“) eine Testkonfiguration erzeugen und im Scheme unter *Run → Options → StoreKit Configuration* auswählen. Alternativ in TestFlight mit Sandbox-Konten testen.
 
 ## iOS-Build mit Codemagic (TestFlight)
@@ -126,12 +134,14 @@ composeApp/src/
     game/model/    Datenmodell: Hex-Raster, Sternarten, Naturgesetze, Upgrades, Sternbilder,
                    Fortschritt (Missionen, Erfolge, Ereignisse, Ziele), Sammlung (Artefakte, Kosmetik), Store-Katalog
     game/engine/   Reine Spiellogik:
-                     GameEngine        Zeit, Aktionen, Ereignisse, Urknall
+                     GameEngine        Zeit, Aktionen, Ereignisse, Urknall (eine Galaxie)
+                     GalaxyOrchestrator Hintergrund-Galaxien, Erschließen, Sternenbrücken
+                     GalaxyFactory     Neubeginn einer Galaxie, Startfelder
                      BoardAnalyzer     Produktion, Sternbilder
                      ProgressionSystem Missionen, Erfolge, Login, Galaxie-Ziele
                      ShopSystem        Kristall-Angebote, Kapseln, Kosmetik, Kaufgutschrift
                      Balance           alle Spielwerte
-    game/save/     Speichern als JSON (multiplatform-settings)
+    game/save/     Speichern als JSON (multiplatform-settings), Format und Migration alter Spielstände
     store/         StoreGateway-Schnittstelle, Test-Store
     ui/            GameController (Spielschleife, Autosave, Offline-Zeit, Store), Theme, HUD, Panels, Dialoge
     ui/render/     Nebel, Sterne, Raster, Kamera, Ereignis-Effekte

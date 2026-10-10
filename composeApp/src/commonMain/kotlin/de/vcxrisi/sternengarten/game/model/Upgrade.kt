@@ -15,10 +15,12 @@ enum class Upgrade(
     val maxLevel: Int? = null,
     /** Permanente Upgrades überleben den Urknall. */
     val permanent: Boolean = false,
+    /** Ausgemustert: bleibt nur wegen alter Spielstände stehen, wird nicht angezeigt und nicht verkauft. */
+    val retired: Boolean = false,
 ) {
     NEBULA_EXPANSION(
-        "Nebel ausdehnen", "Dein Garten wächst um einen Ring.",
-        Currency.STARDUST, 400.0, 40.0, maxLevel = 3,
+        "Nebel ausdehnen", "Ersetzt durch Felder, die du einzeln freikaufst.",
+        Currency.STARDUST, 400.0, 40.0, maxLevel = 3, retired = true,
     ),
     STELLAR_WIND(
         "Sternenwind", "+25 % Produktion aller Sterne.",
@@ -41,7 +43,7 @@ enum class Upgrade(
         Currency.DARK_MATTER, 1.0, 10.0, permanent = true,
     ),
     STARDUST_MEMORY(
-        "Sternengedächtnis", "Jede neue Galaxie startet mit mehr Sternenstaub.",
+        "Sternengedächtnis", "Jede neue Galaxie startet mit mehr Staub.",
         Currency.DARK_MATTER, 1.0, 2.5, maxLevel = 5, permanent = true,
     ),
     DEEP_SLEEP(
@@ -49,11 +51,23 @@ enum class Upgrade(
         Currency.DARK_MATTER, 2.0, 2.0, maxLevel = 5, permanent = true,
     ),
     PRIMORDIAL_NEBULA(
-        "Urnebel", "Jede Galaxie startet einen Ring größer.",
+        "Urnebel", "Jede Galaxie startet mit mehr Feldern (+18, dann +24).",
         Currency.DARK_MATTER, 5.0, 4.0, maxLevel = 2, permanent = true,
     ),
     COMET_LURE(
         "Kometenköder", "Kometen erscheinen 30 % öfter und bringen mehr.",
         Currency.DARK_MATTER, 3.0, 2.5, maxLevel = 3, permanent = true,
+    ),
+    BRIDGE_CRAFT(
+        "Brückenbaukunst", "Sternenbrücken tragen 5 Prozentpunkte mehr, ihre Obergrenze steigt um 25 Prozentpunkte.",
+        Currency.DARK_MATTER, 25.0, 5.0, maxLevel = 4, permanent = true,
+    ),
+    SPACE_FOLD(
+        "Raumfaltung", "Erschließen und Brückenbau dauern 15 % kürzer.",
+        Currency.DARK_MATTER, 500.0, 10.0, maxLevel = 3, permanent = true,
+    ),
+    NEBULA_SURVEY(
+        "Nebelvermessung", "Neue Felder kosten 15 % weniger – in jeder Galaxie.",
+        Currency.DARK_MATTER, 10.0, 3.0, maxLevel = 5, permanent = true,
     ),
 }

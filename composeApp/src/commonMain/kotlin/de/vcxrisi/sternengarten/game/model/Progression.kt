@@ -14,6 +14,9 @@ data class Stats(
     val missionsCompleted: Long = 0,
     val bigBangs: Long = 0,
     val capsulesOpened: Long = 0,
+    val fieldsBought: Long = 0,
+    /** Je fertig gebauter Sternenbrücke eins; Abreißen zählt nicht zurück. Nur für die Chronik. */
+    val bridgesBuilt: Long = 0,
 )
 
 /** Messgrößen, auf denen Missionen und Erfolge aufbauen. */
@@ -24,7 +27,8 @@ enum class Metric(val label: String) {
     SUPERNOVAS("Supernovas"),
     COMETS("Kometen gefangen"),
     BLACK_HOLE_RELEASES("Schwarze Löcher geöffnet"),
-    TOTAL_STARDUST("Sternenstaub verdient"),
+    /** Staub aller Galaxien, umgerechnet in Sternenstaub (Staub ÷ K). */
+    TOTAL_STARDUST("Staub verdient (Sternenstaub-Wert)"),
     BIG_BANGS("Urknalle"),
     EVENTS("Kosmische Ereignisse erlebt"),
     MISSIONS("Missionen erfüllt"),
@@ -32,6 +36,11 @@ enum class Metric(val label: String) {
     STAR_TYPES("Sternarten entdeckt"),
     ARTIFACTS("Artefakte gesammelt"),
     CAPSULES("Kapseln geöffnet"),
+    FIELDS_BOUGHT("Felder freigekauft"),
+    GALAXIES("Galaxien erschlossen"),
+    /** Gleichzeitig stehende Brücken, damit Bauen und Abreißen nichts bringt. */
+    BRIDGES("Sternenbrücken gebaut"),
+    KINDS_COLLAPSED("Galaxiearten zum Urknall gebracht"),
 }
 
 /** Erfolge werden automatisch vergeben. Jeder bringt Kristalle und dauerhaft +2 % Produktion. */
@@ -63,6 +72,15 @@ enum class Achievement(val title: String, val metric: Metric, val threshold: Dou
     MISSIONS_25("Pflichtbewusst", Metric.MISSIONS, 25.0, 40),
     CAPSULES_10("Schatzsucher", Metric.CAPSULES, 10.0, 25),
     ARTIFACTS_ALL("Kurator des Kosmos", Metric.ARTIFACTS, Artifact.entries.size.toDouble(), 150),
+    FIRST_FIELD("Landnahme", Metric.FIELDS_BOUGHT, 1.0, 5),
+    FIELDS_100("Nebelpächter", Metric.FIELDS_BOUGHT, 100.0, 25),
+    FIELDS_1000("Weltenvermesser", Metric.FIELDS_BOUGHT, 1_000.0, 60),
+    SECOND_GALAXY("Zweite Heimat", Metric.GALAXIES, 2.0, 30),
+    GALAXIES_3("Sternenreich", Metric.GALAXIES, 3.0, 50),
+    ALL_GALAXIES("Herr der fünf Galaxien", Metric.GALAXIES, GalaxyKind.entries.size.toDouble(), 150),
+    FIRST_BRIDGE("Brückenschlag", Metric.BRIDGES, 1.0, 25),
+    BRIDGES_5("Netz der Welten", Metric.BRIDGES, 5.0, 60),
+    ALL_KINDS_COLLAPSED("Kosmischer Kreislauf", Metric.KINDS_COLLAPSED, GalaxyKind.entries.size.toDouble(), 120),
 }
 
 /** Tägliche Mission: Fortschritt = aktueller Messwert − Ausgangswert bei Vergabe. */
@@ -94,6 +112,9 @@ enum class GoalKind(val label: String) {
     STAR_LEVEL("Bring einen Stern auf Stufe"),
     ACTIVE_CONSTELLATIONS("Halte verschiedene Sternbilder gleichzeitig aktiv"),
     PRODUCTION_RATE("Erreiche Sternenstaub pro Sekunde"),
+    FIELDS_OWNED("Erweitere den Garten auf Felder"),
+    EXCLUSIVE_STARS("Lass die besondere Sternart dieser Galaxie leuchten"),
+    WHITE_DWARFS("Halte Weiße Zwerge gleichzeitig"),
 }
 
 /** Ziel einer einzelnen Galaxie – drei pro Galaxie, alle drei geben zusätzlich eine Artefakt-Kapsel. */

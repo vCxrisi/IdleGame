@@ -5,9 +5,12 @@ import de.vcxrisi.sternengarten.game.engine.BoardAnalyzer
 import de.vcxrisi.sternengarten.game.engine.GameEngine
 import de.vcxrisi.sternengarten.game.engine.VALUE_CAP
 import de.vcxrisi.sternengarten.game.engine.capped
+import de.vcxrisi.sternengarten.game.engine.hasUnsafeValues
 import de.vcxrisi.sternengarten.game.engine.isSafe
 import de.vcxrisi.sternengarten.game.engine.sanitized
 import de.vcxrisi.sternengarten.game.model.Comet
+import de.vcxrisi.sternengarten.game.model.GalaxyKind
+import de.vcxrisi.sternengarten.game.model.GalaxyRun
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.Star
@@ -16,6 +19,7 @@ import de.vcxrisi.sternengarten.game.model.Upgrade
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -55,7 +59,20 @@ class OverflowTest {
             totalStardust = Double.NaN,
             stars = mapOf(Hex.ORIGIN to Star(StarType.BLACK_HOLE, stored = Double.POSITIVE_INFINITY, age = Double.NaN)),
             enrichment = mapOf(Hex(1, 0) to Double.NaN),
+            parked = mapOf(
+                GalaxyKind.FROST to GalaxyRun(
+                    stardust = Double.NaN,
+                    elements = Double.NEGATIVE_INFINITY,
+                    runStardust = Double.POSITIVE_INFINITY,
+                    boostRemaining = Double.NaN,
+                    cometCooldown = Double.POSITIVE_INFINITY,
+                    eventCooldown = Double.NaN,
+                    stars = mapOf(Hex.ORIGIN to Star(StarType.RED_DWARF, stored = Double.NaN, age = Double.POSITIVE_INFINITY)),
+                    enrichment = mapOf(Hex(1, 0) to Double.POSITIVE_INFINITY),
+                ),
+            ),
         )
+        assertTrue(broken.hasUnsafeValues())
         val clean = broken.sanitized()
         assertEquals(0.0, clean.stardust)
         assertEquals(VALUE_CAP, clean.elements)
@@ -64,6 +81,24 @@ class OverflowTest {
         assertEquals(VALUE_CAP, clean.stars.getValue(Hex.ORIGIN).stored)
         assertEquals(0.0, clean.stars.getValue(Hex.ORIGIN).age)
         assertEquals(0.0, clean.enrichment.getValue(Hex(1, 0)))
+
+        // Die geparkte Galaxie wird genauso bereinigt.
+        val run = clean.parked.getValue(GalaxyKind.FROST)
+        assertEquals(0.0, run.stardust)
+        assertEquals(0.0, run.elements)
+        assertEquals(VALUE_CAP, run.runStardust)
+        assertEquals(0.0, run.boostRemaining)
+        assertEquals(VALUE_CAP, run.cometCooldown)
+        assertEquals(0.0, run.eventCooldown)
+        assertEquals(0.0, run.stars.getValue(Hex.ORIGIN).stored)
+        assertEquals(VALUE_CAP, run.stars.getValue(Hex.ORIGIN).age)
+        assertEquals(VALUE_CAP, run.enrichment.getValue(Hex(1, 0)))
+        assertFalse(clean.hasUnsafeValues())
+
+        // Auch wenn nur eine geparkte Galaxie kaputt ist, wird das erkannt.
+        val parkedOnly = GameState(parked = broken.parked)
+        assertTrue(parkedOnly.hasUnsafeValues())
+        assertFalse(parkedOnly.sanitized().hasUnsafeValues())
     }
 
     @Test

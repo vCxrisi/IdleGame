@@ -2,6 +2,7 @@ package de.vcxrisi.sternengarten.game.engine
 
 import de.vcxrisi.sternengarten.game.model.ActiveEvent
 import de.vcxrisi.sternengarten.game.model.Comet
+import de.vcxrisi.sternengarten.game.model.ConstellationKind
 import de.vcxrisi.sternengarten.game.model.CosmicEvent
 import de.vcxrisi.sternengarten.game.model.Currency
 import de.vcxrisi.sternengarten.game.model.GalaxyLaw
@@ -12,6 +13,7 @@ import de.vcxrisi.sternengarten.game.model.StarFate
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
+import de.vcxrisi.sternengarten.game.model.withRun
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -25,20 +27,30 @@ class GameEngine(private val random: Random = Random.Default) {
 
     val progression = ProgressionSystem(random)
     val shop = ShopSystem(random)
+    /** Geparkte Galaxien, Erschließung und Sternenbrücken. */
+    val galaxies by lazy { GalaxyOrchestrator(this) }
 
     // ---------------------------------------------------------------- Zeit
 
-    fun tick(state: GameState, dt: Double, offline: Boolean = false): TickResult {
+    /**
+     * Lässt die aktive Galaxie [dt] Sekunden laufen. [offline]: während das Spiel geschlossen war.
+     * [background]: eine geparkte Galaxie bei offener App – ohne Kometenrausch, Spielzeit, Kometen, Ereignisse
+     * und Erfolgsprüfung; die laufen einmal pro Schritt auf dem ganzen Zustand.
+     */
+    fun tick(state: GameState, dt: Double, offline: Boolean = false, background: Boolean = false): TickResult {
         if (dt <= 0.0 || state.lawChoices.isNotEmpty()) return TickResult(state, emptyList())
         val events = ArrayList<GameEvent>()
         val analysis = BoardAnalyzer.analyze(state)
         val law = state.law
 
-        val boostActive = state.boostRemaining > 0.0
-        val timeMult = (if (offline) law.offlineMult else law.onlineMult) *
-            (if (boostActive && !offline) Balance.COMET_BOOST_MULT else 1.0)
+        val lawMult = if (offline) law.offlineMult * state.activeGalaxy.offlineMult else law.onlineMult
+        // Der Kometenrausch wirkt nur in der Galaxie, die man gerade ansieht.
+        val boosted = state.boostRemaining > 0.0 && !offline && !background
+        val timeMult = lawMult * (if (boosted) Balance.COMET_BOOST_MULT else 1.0)
 
         val income = (analysis.totalRate * timeMult * dt).capped()
+        // Eigenes Einkommen ohne Kometenrausch: Grundlage für Sternenbrücken.
+        val ownIncome = (analysis.totalRate * lawMult * dt).capped()
         var elements = state.elements
         var supernovas = 0
         val enrichment = state.enrichment.toMutableMap()
@@ -74,7 +86,9 @@ class GameEngine(private val random: Random = Random.Default) {
             when (star.type.fate) {
                 StarFate.SUPERNOVA -> {
                     stars.remove(hex)
-                    val gain = Balance.supernovaElements(state, star)
+                    // Glutsterne bringen mehr Elemente, je größer ihr Nest ist.
+                    val nest = min((analysis.emberGroups[hex] ?: 1) - 1, Balance.EMBER_GROUP_CAP)
+                    val gain = Balance.supernovaElements(state, star) * (1.0 + Balance.EMBER_SUPERNOVA_PER_MEMBER * nest)
                     elements += gain
                     supernovas++
                     val fertilizer = Balance.supernovaEnrichment(state)
@@ -97,24 +111,34 @@ class GameEngine(private val random: Random = Random.Default) {
             stars = stars,
             enrichment = enrichment,
             runStardust = state.runStardust + income,
-            totalStardust = state.totalStardust + income,
+            totalStardust = state.totalStardust + Balance.normalizedDust(state, income),
             supernovaCount = state.supernovaCount + supernovas,
             runSupernovas = state.runSupernovas + supernovas,
-            boostRemaining = max(0.0, state.boostRemaining - dt),
-            playTime = state.playTime + dt,
+            boostRemaining = if (background) state.boostRemaining else max(0.0, state.boostRemaining - dt),
+            playTime = if (background) state.playTime else state.playTime + dt,
         )
 
-        // Kometen und Ereignisse gibt es nur, wenn jemand zusieht.
-        if (!offline) {
+        // Kometen und Ereignisse gibt es nur, wenn jemand zusieht – und nie in der Großen Stille.
+        if (!offline && !background && !law.quiet) {
             next = updateCosmicEvent(next, dt, events)
             next = updateComet(next, dt, events)
         }
 
         next = unlockStarTypes(next, events)
-        next = discover(next, events)
-        next = progression.checkAchievements(next, events)
-        return TickResult(next.sanitized(), events)
+        next = discover(next, analysis.activeKinds, events)
+        if (!background) next = progression.checkAchievements(next, events)
+        return TickResult(next.sanitized(), events, ownIncome)
     }
+
+    /**
+     * Beendet ein laufendes Ereignis vorzeitig (Offline-Zeit, Parken der Galaxie). Das nächste kommt dann nicht
+     * sofort – sonst ließe sich durch Hin- und Herwechseln ein Sternenregen erzwingen.
+     */
+    internal fun withoutEvent(state: GameState): GameState =
+        if (state.event == null) state else state.copy(event = null, eventCooldown = cooldownAfterEvent(state.eventCooldown))
+
+    /** Wartezeit nach einem vorzeitig beendeten Ereignis: mindestens ein ganzer Abstand bis zum nächsten. */
+    internal fun cooldownAfterEvent(cooldown: Double): Double = max(cooldown, Balance.eventInterval(random.nextDouble()))
 
     /** Neben einer Nebelwiege bleibt die Zeit stehen. */
     fun isSheltered(state: GameState, hex: Hex): Boolean =
@@ -164,10 +188,13 @@ class GameEngine(private val random: Random = Random.Default) {
         return next
     }
 
+    /** Exklusive Sternarten werden nur in ihrer eigenen Galaxie freigeschaltet. */
     private fun unlockStarTypes(state: GameState, events: MutableList<GameEvent>): GameState {
         var unlocked = state.unlocked
         for (type in StarType.entries) {
-            if (type !in unlocked && max(state.stardust, state.runStardust) >= type.unlockAt) {
+            if (type in unlocked) continue
+            if (type.exclusiveTo != null && type.exclusiveTo != state.activeGalaxy) continue
+            if (max(state.stardust, state.runStardust) >= Balance.unlockThreshold(state, type)) {
                 unlocked = unlocked + type
                 events += GameEvent.Unlocked(type)
             }
@@ -175,9 +202,8 @@ class GameEngine(private val random: Random = Random.Default) {
         return if (unlocked === state.unlocked) state else state.copy(unlocked = unlocked)
     }
 
-    /** Neu gebildete Sternbilder werden dauerhaft in den Katalog aufgenommen. */
-    private fun discover(state: GameState, events: MutableList<GameEvent>): GameState {
-        val active = BoardAnalyzer.findConstellations(state).mapTo(mutableSetOf()) { it.kind }
+    /** Neu gebildete Sternbilder werden dauerhaft in den Katalog aufgenommen; [active] kommt aus der Analyse des Ticks. */
+    private fun discover(state: GameState, active: Set<ConstellationKind>, events: MutableList<GameEvent>): GameState {
         val fresh = active - state.discovered
         if (fresh.isEmpty()) return state
         fresh.sortedBy { it.ordinal }.forEach { events += GameEvent.Discovered(it) }
@@ -199,21 +225,29 @@ class GameEngine(private val random: Random = Random.Default) {
         )
     }
 
-    /** Simuliert die Zeit, in der das Spiel geschlossen war. */
-    fun applyOffline(state: GameState, seconds: Double): Pair<GameState, OfflineReport> {
+    /**
+     * Simuliert die Zeit, in der das Spiel geschlossen war, in höchstens [maxSteps] Schritten.
+     * [background]: eine geparkte Galaxie (siehe [tick]); alle Galaxien zusammen holt [GalaxyOrchestrator.applyOfflineAll] nach.
+     */
+    fun applyOffline(
+        state: GameState,
+        seconds: Double,
+        background: Boolean = false,
+        maxSteps: Int = Balance.OFFLINE_STEP_BUDGET,
+    ): Pair<GameState, OfflineReport> {
         val capped = min(seconds, Balance.maxOfflineSeconds(state)).coerceAtLeast(0.0)
         // Ein laufendes Ereignis endet, während niemand zusieht.
-        val start = state.copy(event = null, comet = null)
+        val start = withoutEvent(state).copy(comet = null)
         if (capped < 1.0 || state.lawChoices.isNotEmpty()) {
             return start to OfflineReport(seconds, capped, 0.0, 0.0, 0)
         }
         // Grobe Schritte reichen: Produktion ist zwischen zwei Lebensereignissen konstant.
-        val steps = ceil(capped / 5.0).toInt().coerceIn(1, 720)
+        val steps = ceil(capped / Balance.OFFLINE_STEP_SECONDS).toInt().coerceIn(1, maxSteps.coerceAtLeast(1))
         val step = capped / steps
         var current = start
         var supernovas = 0
         repeat(steps) {
-            val result = tick(current, step, offline = true)
+            val result = tick(current, step, offline = true, background = background)
             supernovas += result.events.count { it is GameEvent.Supernova }
             current = result.state
         }
@@ -233,7 +267,7 @@ class GameEngine(private val random: Random = Random.Default) {
         return state.copy(
             stardust = state.stardust + amount,
             runStardust = state.runStardust + amount,
-            totalStardust = state.totalStardust + amount,
+            totalStardust = state.totalStardust + Balance.normalizedDust(state, amount),
         ) to amount
     }
 
@@ -241,7 +275,8 @@ class GameEngine(private val random: Random = Random.Default) {
 
     fun canPlant(state: GameState, hex: Hex, type: StarType): Boolean =
         type in state.unlocked &&
-            hex.length() <= Balance.gardenRadius(state) &&
+            (type.exclusiveTo == null || type.exclusiveTo == state.activeGalaxy) &&
+            hex in state.ownedFields &&
             hex !in state.stars &&
             state.stardust >= Balance.starCost(state, type)
 
@@ -297,7 +332,7 @@ class GameEngine(private val random: Random = Random.Default) {
         val next = state.copy(
             stardust = state.stardust + amount,
             runStardust = state.runStardust + amount,
-            totalStardust = state.totalStardust + amount,
+            totalStardust = state.totalStardust + Balance.normalizedDust(state, amount),
             stars = state.stars + (hex to star.copy(stored = 0.0)),
             stats = state.stats.copy(blackHoleReleases = state.stats.blackHoleReleases + 1),
         )
@@ -305,11 +340,9 @@ class GameEngine(private val random: Random = Random.Default) {
     }
 
     fun canBuy(state: GameState, upgrade: Upgrade): Boolean {
+        if (upgrade.retired) return false
         val max = upgrade.maxLevel
         if (max != null && state.level(upgrade) >= max) return false
-        if (upgrade == Upgrade.NEBULA_EXPANSION &&
-            Balance.gardenRadius(state) >= Balance.MAX_RADIUS
-        ) return false
         return state.amount(upgrade.currency) >= Balance.upgradeCost(state, upgrade)
     }
 
@@ -321,7 +354,29 @@ class GameEngine(private val random: Random = Random.Default) {
             Currency.ELEMENTS -> state.copy(elements = state.elements - cost)
             Currency.DARK_MATTER -> state.copy(darkMatter = state.darkMatter - cost)
         }
-        return paid.copy(upgrades = paid.upgrades + (upgrade to paid.level(upgrade) + 1))
+        val next = paid.copy(upgrades = paid.upgrades + (upgrade to paid.level(upgrade) + 1))
+        // Der Urnebel vergrößert die Startfläche sofort – in jeder Galaxie.
+        return if (upgrade == Upgrade.PRIMORDIAL_NEBULA) GalaxyFactory.extendStartingFields(next) else next
+    }
+
+    /** Ein Feld lässt sich kaufen, wenn es an den Garten grenzt, nah genug am Zentrum liegt und bezahlbar ist. */
+    fun canBuyField(state: GameState, hex: Hex): Boolean =
+        state.lawChoices.isEmpty() &&
+            hex !in state.ownedFields &&
+            hex.length() <= Balance.maxFieldRadius(state.law) &&
+            hex.neighbors().any { it in state.ownedFields } &&
+            state.stardust >= Balance.fieldCost(state)
+
+    /** Kauft ein Feld frei; liefert auch den gezahlten Preis. */
+    fun buyField(state: GameState, hex: Hex): Pair<GameState, Double>? {
+        if (!canBuyField(state, hex)) return null
+        val cost = Balance.fieldCost(state)
+        return state.copy(
+            stardust = state.stardust - cost,
+            ownedFields = state.ownedFields + hex,
+            fieldsBought = state.fieldsBought + 1,
+            stats = state.stats.copy(fieldsBought = state.stats.fieldsBought + 1),
+        ) to cost
     }
 
     /** Fängt den aktuellen Kometen. Belohnung: Sternenregen oder Kometenrausch; Meteore bringen immer Staub. */
@@ -335,11 +390,11 @@ class GameEngine(private val random: Random = Random.Default) {
         val rate = BoardAnalyzer.analyze(state).totalRate * state.law.onlineMult
         if (comet.meteor || random.nextBoolean()) {
             val seconds = if (comet.meteor) Balance.METEOR_REWARD_SECONDS else 120.0
-            val amount = max(25.0, rate * seconds * rewardMult).capped()
+            val amount = max(Balance.cometMinReward(state), rate * seconds * rewardMult).capped()
             return caught.copy(
                 stardust = caught.stardust + amount,
                 runStardust = caught.runStardust + amount,
-                totalStardust = caught.totalStardust + amount,
+                totalStardust = caught.totalStardust + Balance.normalizedDust(state, amount),
             ) to GameEvent.CometStardust(amount, comet.meteor)
         }
         val seconds = Balance.COMET_BOOST_SECONDS * rewardMult
@@ -348,35 +403,25 @@ class GameEngine(private val random: Random = Random.Default) {
 
     // ---------------------------------------------------------------- Urknall
 
-    fun canBigBang(state: GameState): Boolean = Balance.darkMatterGain(state) >= 1.0
+    /** Der Faktor der Galaxieart zählt hier nicht – sonst ließen sich teure Galaxien für Kleinstbeträge kollabieren. */
+    fun canBigBang(state: GameState): Boolean = Balance.darkMatterBase(state) >= 1.0 && state.lawChoices.isEmpty()
 
     /**
-     * Setzt die Galaxie zurück. Alles, was nicht zur einzelnen Galaxie gehört (Dunkle Materie, permanente
-     * Upgrades, Sternarten, Sternbilder, Kristalle, Artefakte, Erfolge, Käufe …), bleibt erhalten.
-     * Danach wählt der Spieler ein neues Naturgesetz.
+     * Setzt die aktive Galaxie zurück (siehe [GalaxyFactory.freshRun]). Alles, was nicht zur einzelnen Galaxie gehört
+     * (Dunkle Materie, permanente Upgrades, Sternarten, Sternbilder, Kristalle, Artefakte, Erfolge, Käufe,
+     * die anderen Galaxien …), bleibt erhalten. Danach wählt der Spieler ein neues Naturgesetz.
      */
     fun bigBang(state: GameState): GameState? {
         if (!canBigBang(state)) return null
-        val fresh = GameState()
-        val choices = GalaxyLaw.entries.filter { it != GalaxyLaw.NORMAL && it != state.law }.shuffled(random).take(3)
-        val reset = state.copy(
+        var fresh = GalaxyFactory.freshRun(
+            state, state.activeGalaxy, state.law, state.galaxyNumber, state.galaxyName, rollLawChoices(state.law),
+        )
+        // Ein laufendes Ereignis endet; das nächste kommt nicht sofort, sonst ließe es sich neu auswürfeln.
+        if (state.event != null) fresh = fresh.copy(eventCooldown = cooldownAfterEvent(fresh.eventCooldown))
+        return state.withRun(state.activeGalaxy, fresh).copy(
             darkMatter = state.darkMatter + Balance.darkMatterGain(state),
-            elements = fresh.elements,
-            stars = fresh.stars,
-            enrichment = fresh.enrichment,
-            upgrades = state.upgrades.filterKeys { it.permanent },
-            runStardust = 0.0,
-            runSupernovas = 0,
-            comet = null,
-            cometCooldown = fresh.cometCooldown,
-            boostRemaining = 0.0,
-            event = null,
-            eventCooldown = fresh.eventCooldown,
-            galaxyGoals = emptyList(),
-            lawChoices = choices,
             stats = state.stats.copy(bigBangs = state.stats.bigBangs + 1),
         )
-        return reset.copy(stardust = Balance.startingStardust(reset))
     }
 
     fun chooseGalaxy(state: GameState, law: GalaxyLaw): GameState? {
@@ -384,13 +429,21 @@ class GameEngine(private val random: Random = Random.Default) {
         val chosen = state.copy(
             law = law,
             galaxyNumber = state.galaxyNumber + 1,
-            galaxyName = galaxyName(),
+            // Eine frisch erschlossene Galaxie (Zyklus 0) behält ihren Namen.
+            galaxyName = if (state.galaxyNumber == 0) state.galaxyName else galaxyName(),
             lawChoices = emptyList(),
+            // Das Naturgesetz bestimmt die Startfläche mit (Hohe Gravitation).
+            ownedFields = Balance.startFields(state, state.activeGalaxy, law),
+            fieldsBought = 0,
         )
         return chosen.copy(galaxyGoals = progression.rollGalaxyGoals(chosen))
     }
 
-    private fun galaxyName(): String {
+    /** Drei Naturgesetze zur Wahl, nie die vertrauten und nie [exclude]. */
+    internal fun rollLawChoices(exclude: GalaxyLaw?): List<GalaxyLaw> =
+        GalaxyLaw.entries.filter { it != GalaxyLaw.NORMAL && it != exclude }.shuffled(random).take(3)
+
+    internal fun galaxyName(): String {
         val prefixes = listOf("NGC", "Messier", "IC", "Kepler", "Lyra", "Andros", "Vela", "Cygni")
         return "${prefixes[random.nextInt(prefixes.size)]} ${random.nextInt(100, 9999)}"
     }

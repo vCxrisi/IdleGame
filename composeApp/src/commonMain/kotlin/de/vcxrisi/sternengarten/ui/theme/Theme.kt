@@ -5,6 +5,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import de.vcxrisi.sternengarten.game.model.Currency
+import de.vcxrisi.sternengarten.game.model.GalaxyKind
 import de.vcxrisi.sternengarten.game.model.Rarity
 import de.vcxrisi.sternengarten.game.model.StarType
 
@@ -37,6 +38,15 @@ object Palette {
     }
 }
 
+/** Leitfarbe einer Galaxieart – für ihren Staub, ihr Dock-Symbol und ihre Karten. */
+fun galaxyColor(kind: GalaxyKind): Color = when (kind) {
+    GalaxyKind.SPIRAL -> Palette.Stardust
+    GalaxyKind.FROST -> Color(0xFF9FE3FF)
+    GalaxyKind.EMBER -> Color(0xFFFF8A5B)
+    GalaxyKind.AURORA -> Color(0xFFC6F26B)
+    GalaxyKind.SHADOW -> Color(0xFF8A7BFF)
+}
+
 /** Farben eines Sterntyps: heller Kern und farbiges Leuchten. */
 data class StarColors(val core: Color, val glow: Color, val secondary: Color = glow)
 
@@ -53,6 +63,10 @@ fun starColors(type: StarType): StarColors = when (type) {
     StarType.MAGNETAR -> StarColors(Color(0xFFFFF0FF), Color(0xFFFF4FD8), Color(0xFF7A5CFF))
     StarType.NEBULA_NURSERY -> StarColors(Color(0xFFFFE6F4), Color(0xFFFF8FC8), Color(0xFF8FD8FF))
     StarType.QUASAR -> StarColors(Color(0xFFFFFFFF), Color(0xFFFFE27A), Color(0xFF7AD8FF))
+    StarType.FROST_CRYSTAL -> StarColors(Color(0xFFF4FDFF), Color(0xFF9FE8FF))
+    StarType.EMBER_STAR -> StarColors(Color(0xFFFFE2C8), Color(0xFFFF5A1F), Color(0xFFFFB03D))
+    StarType.AURORA_STAR -> StarColors(Color(0xFFFFFFFF), Color(0xFF7DFFB0), Color(0xFFC6F26B))
+    StarType.SHADOW_STAR -> StarColors(Color(0xFF1A1030), Color(0xFF8A7BFF), Color(0xFF3D2A7A))
 }
 
 val WhiteDwarfColors = StarColors(Color(0xFFFFFFFF), Color(0xFFBFD8FF))

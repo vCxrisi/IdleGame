@@ -36,6 +36,12 @@ class ParticleSystem(private val capacity: Int = 900) {
 
     val isEmpty: Boolean get() = count == 0 && rings.isEmpty()
 
+    /** Entfernt alle Partikel und Ringe – etwa beim Wechsel in eine andere Galaxie. */
+    fun clear() {
+        count = 0
+        rings.clear()
+    }
+
     /** Optionale Umfärbung jedes neuen Partikels (Funken-Stil aus dem Shop). */
     var palette: ((Color) -> Color)? = null
 

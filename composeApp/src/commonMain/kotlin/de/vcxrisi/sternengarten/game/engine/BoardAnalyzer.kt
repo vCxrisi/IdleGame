@@ -5,6 +5,7 @@ import de.vcxrisi.sternengarten.game.model.CosmicEvent
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.StarType
+import kotlin.math.min
 
 data class ConstellationInstance(val kind: ConstellationKind, val members: List<Hex>)
 
@@ -23,6 +24,14 @@ data class StarBreakdown(
     val rate: Double,
     /** Zusätzliche Stufen durch angrenzende Neutronensterne. */
     val levelBonus: Int = 0,
+    /** Eiskristall: Bonus für besetzte Drehlagen um das Zentrum (0,3 = +30 %). */
+    val symmetry: Double = 0.0,
+    /** Polarlichtstern: Bonus für verschiedene Sternarten unter den Nachbarn. */
+    val variety: Double = 0.0,
+    /** Schattenstern: Bonus für angrenzende Felder außerhalb des Gartens („Leere“). */
+    val edge: Double = 0.0,
+    /** Glutstern: Faktor für die Größe seines Nests. */
+    val group: Double = 1.0,
 )
 
 data class BoardAnalysis(
@@ -32,6 +41,8 @@ data class BoardAnalysis(
     val constellations: List<ConstellationInstance>,
     val activeKinds: Set<ConstellationKind>,
     val globalMultiplier: Double,
+    /** Größe des zusammenhängenden Nests je Glutstern. */
+    val emberGroups: Map<Hex, Int> = emptyMap(),
 )
 
 object BoardAnalyzer {
@@ -67,6 +78,7 @@ object BoardAnalyzer {
         // Quasare heben die ganze Galaxie – je mehr Sterne, desto stärker.
         val quasars = stars.values.count { it.type == StarType.QUASAR }
         val quasarMult = 1.0 + Balance.QUASAR_PER_STAR * stars.size * quasars
+        val emberGroups = emberGroups(state)
 
         val global = Balance.globalMultiplier(state)
         val raw = HashMap<Hex, StarBreakdown>()
@@ -92,13 +104,38 @@ object BoardAnalyzer {
             }
             aura += pulsarAura[hex] ?: 0.0
 
+            // Exklusive Sternarten haben eigene Boni, getrennt ausgewiesen für das Info-Panel.
+            var symmetry = 0.0
+            var variety = 0.0
+            var edge = 0.0
+            var group = 1.0
+            when (star.type) {
+                StarType.FROST_CRYSTAL -> if (hex != Hex.ORIGIN) {
+                    var rotated = hex
+                    var occupiedRotations = 0
+                    repeat(5) {
+                        rotated = rotated.rotated60()
+                        if (rotated in stars) occupiedRotations++
+                    }
+                    symmetry = Balance.FROST_SYMMETRY_BONUS * occupiedRotations * auraMult
+                }
+                StarType.AURORA_STAR ->
+                    variety = Balance.AURORA_VARIETY_BONUS * neighbors.mapNotNullTo(HashSet()) { stars[it]?.type }.size * auraMult
+                StarType.SHADOW_STAR ->
+                    edge = Balance.SHADOW_EDGE_BONUS * neighbors.count { it !in state.ownedFields } * auraMult
+                StarType.EMBER_STAR ->
+                    group = 1.0 + Balance.EMBER_GROUP_BONUS * min((emberGroups[hex] ?: 1) - 1, Balance.EMBER_GROUP_CAP)
+                else -> Unit
+            }
+
             val crowding = if (star.type == StarType.BLUE_GIANT && law.blueGiantPenalty) {
                 (1.0 - Balance.BLUE_GIANT_CROWDING * occupied).coerceAtLeast(0.1)
             } else 1.0
             val pair = if (star.type == StarType.BINARY && hasBinaryNeighbor) Balance.BINARY_PAIR_MULT else 1.0
             val enrichment = state.enrichment[hex] ?: 0.0
             val constellation = (kindsByHex[hex] ?: emptySet()).sumOf { it.memberBonus } * constellationMult
-            val base = star.type.baseOutput * Balance.levelMultiplier(star.level + levelBonus)
+            val redDwarf = if (star.type == StarType.RED_DWARF) law.redDwarfMult else 1.0
+            val base = star.type.baseOutput * Balance.levelMultiplier(star.level + levelBonus) * redDwarf
             val phase = Balance.phaseMultiplier(state, star)
             val storm = if (event == CosmicEvent.SOLAR_STORM &&
                 (star.type == StarType.YELLOW_STAR || star.type == StarType.BLUE_GIANT)
@@ -106,10 +143,13 @@ object BoardAnalyzer {
 
             // Sofort begrenzen: Ein unendlicher Wert würde beim Abzug durch Schwarze Löcher zu NaN (∞ − ∞).
             val rate = (
-                base * phase * (1.0 + aura) * crowding * pair * (1.0 + enrichment) * (1.0 + constellation) *
-                    storm * quasarMult * global
+                base * phase * (1.0 + aura + symmetry + variety + edge) * crowding * pair * group * (1.0 + enrichment) *
+                    (1.0 + constellation) * storm * quasarMult * global
                 ).capped()
-            raw[hex] = StarBreakdown(base, phase, aura, crowding, pair, enrichment, constellation, 0.0, rate, levelBonus)
+            raw[hex] = StarBreakdown(
+                base, phase, aura, crowding, pair, enrichment, constellation, 0.0, rate, levelBonus,
+                symmetry = symmetry, variety = variety, edge = edge, group = group,
+            )
         }
 
         // Schwarze Löcher zweigen die Hälfte der Nachbarproduktion ab.
@@ -144,7 +184,27 @@ object BoardAnalyzer {
             constellations = constellations,
             activeKinds = constellations.mapTo(mutableSetOf()) { it.kind },
             globalMultiplier = (global * quasarMult).capped(),
+            emberGroups = emberGroups,
         )
+    }
+
+    /** Glutsterne, die sich berühren, bilden ein Nest: Größe des Nests je Glutstern. */
+    fun emberGroups(state: GameState): Map<Hex, Int> {
+        val stars = state.stars
+        val groups = HashMap<Hex, Int>()
+        for ((hex, star) in stars) {
+            if (star.type != StarType.EMBER_STAR || hex in groups) continue
+            val nest = arrayListOf(hex)
+            val seen = hashSetOf(hex)
+            var i = 0
+            while (i < nest.size) {
+                for (n in nest[i++].neighbors()) {
+                    if (stars[n]?.type == StarType.EMBER_STAR && seen.add(n)) nest += n
+                }
+            }
+            for (member in nest) groups[member] = nest.size
+        }
+        return groups
     }
 
     /** Alle Felder mit genau dem Abstand [radius] um [center]. */

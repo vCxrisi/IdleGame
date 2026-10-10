@@ -5,7 +5,9 @@ import de.vcxrisi.sternengarten.game.engine.BoardAnalyzer
 import de.vcxrisi.sternengarten.game.engine.GameEngine
 import de.vcxrisi.sternengarten.game.engine.GameEvent
 import de.vcxrisi.sternengarten.game.model.ConstellationKind
+import de.vcxrisi.sternengarten.game.model.GalaxyKind
 import de.vcxrisi.sternengarten.game.model.GalaxyLaw
+import de.vcxrisi.sternengarten.game.model.GalaxyRun
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.Hex
 import de.vcxrisi.sternengarten.game.model.Star
@@ -50,6 +52,7 @@ class GameEngineTest {
         assertClose(90.0, planted.stardust)
         assertNull(engine.plant(planted, Hex.ORIGIN, StarType.RED_DWARF), "Feld ist belegt")
         assertNull(engine.plant(planted, Hex(5, 0), StarType.RED_DWARF), "außerhalb des Gartens")
+        assertNull(engine.plant(planted, Hex(3, 0), StarType.RED_DWARF), "Grenzfeld, noch nicht freigekauft")
         assertNull(engine.plant(planted, Hex(1, 0), StarType.YELLOW_STAR), "noch gesperrt")
         // Zweiter Roter Zwerg wird teurer.
         val second = assertNotNull(engine.plant(planted, Hex(1, 0), StarType.RED_DWARF))
@@ -214,6 +217,14 @@ class GameEngineTest {
 
     @Test
     fun bigBangKeepsMetaProgressAndOffersLaws() {
+        val frost = GalaxyRun(
+            stardust = 4_200.0,
+            stars = mapOf(Hex(1, 0) to adult(StarType.YELLOW_STAR)),
+            runUpgrades = mapOf(Upgrade.STELLAR_WIND to 1),
+            law = GalaxyLaw.ENTROPY,
+            galaxyNumber = 3,
+            runStardust = 9e6,
+        )
         val state = GameState(
             runStardust = 8_000_000.0, // ∛8 = 2 Dunkle Materie
             darkMatter = 1.0,
@@ -221,6 +232,9 @@ class GameEngineTest {
             upgrades = mapOf(Upgrade.STELLAR_WIND to 3, Upgrade.DARK_ENERGY to 1),
             discovered = setOf(ConstellationKind.TRIO),
             unlocked = setOf(StarType.RED_DWARF, StarType.YELLOW_STAR),
+            ownedFields = Hex.area(3).toSet(),
+            fieldsBought = 18,
+            parked = mapOf(GalaxyKind.FROST to frost),
         )
         assertEquals(2.0, Balance.darkMatterGain(state))
         val reset = assertNotNull(engine.bigBang(state))
@@ -231,6 +245,11 @@ class GameEngineTest {
         assertEquals(state.unlocked, reset.unlocked)
         assertEquals(3, reset.lawChoices.size)
         assertFalse(GalaxyLaw.NORMAL in reset.lawChoices)
+        // Gekaufte Felder fallen auf die Startfläche zurück, die anderen Galaxien bleiben unberührt.
+        assertEquals(Hex.area(2).toSet(), reset.ownedFields)
+        assertEquals(0, reset.fieldsBought)
+        assertEquals(mapOf(GalaxyKind.FROST to frost), reset.parked)
+        assertEquals(GalaxyKind.SPIRAL, reset.activeGalaxy)
 
         // Solange gewählt wird, steht die Zeit still.
         assertEquals(reset, engine.tick(reset, 10.0).state)
@@ -247,13 +266,37 @@ class GameEngineTest {
     }
 
     @Test
-    fun upgradesRespectCurrencyAndMaxLevel() {
-        val rich = GameState(stardust = 1e12)
-        var state = rich
-        repeat(3) { state = assertNotNull(engine.buyUpgrade(state, Upgrade.NEBULA_EXPANSION)) }
-        assertEquals(5, Balance.gardenRadius(state))
-        assertNull(engine.buyUpgrade(state, Upgrade.NEBULA_EXPANSION), "Maximalstufe erreicht")
+    fun fieldsAreBoughtOneByOneAndGetPricier() {
+        val rich = GameState(stardust = 1e6)
+        assertClose(25.0, Balance.fieldCost(rich))
+        val (first, cost) = assertNotNull(engine.buyField(rich, Hex(3, 0)))
+        assertClose(25.0, cost)
+        assertClose(1e6 - 25.0, first.stardust)
+        assertTrue(Hex(3, 0) in first.ownedFields)
+        assertEquals(1, first.fieldsBought)
+        assertEquals(1, first.stats.fieldsBought)
+        assertClose(28.75, Balance.fieldCost(first))
+        assertNull(engine.buyField(first, Hex(3, 0)), "schon gekauft")
+        assertNull(engine.buyField(first, Hex(5, 0)), "grenzt nicht an den Garten")
+        assertNotNull(engine.plant(first, Hex(3, 0), StarType.RED_DWARF), "gekaufte Felder lassen sich bepflanzen")
+
+        val wide = rich.copy(ownedFields = Hex.area(6).toSet())
+        assertNull(engine.buyField(wide, Hex(7, 0)), "weiter als 6 Felder vom Zentrum")
+        assertNull(engine.buyField(GameState(stardust = 24.0), Hex(3, 0)), "zu wenig Sternenstaub")
+
+        // Der alte Ring-Kauf ist ausgemustert; die übrige Forschung bleibt bei Währung und Höchststufe.
+        assertNull(engine.buyUpgrade(rich.copy(stardust = 1e12), Upgrade.NEBULA_EXPANSION))
         assertNull(engine.buyUpgrade(rich, Upgrade.FUSION), "kostet Elemente")
+        var state = GameState(elements = 1e12)
+        repeat(8) { state = assertNotNull(engine.buyUpgrade(state, Upgrade.LONGEVITY)) }
+        assertNull(engine.buyUpgrade(state, Upgrade.LONGEVITY), "Maximalstufe erreicht")
+    }
+
+    @Test
+    fun noFieldsAreBoughtWhileChoosingLaws() {
+        val choosing = GameState(stardust = 1e6, lawChoices = listOf(GalaxyLaw.ENTROPY, GalaxyLaw.NURSERY, GalaxyLaw.REDSHIFT))
+        assertFalse(engine.canBuyField(choosing, Hex(3, 0)))
+        assertNull(engine.buyField(choosing, Hex(3, 0)))
     }
 
     @Test

@@ -1,6 +1,7 @@
 package de.vcxrisi.sternengarten.ui.theme
 
 import kotlin.math.abs
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
@@ -48,13 +49,27 @@ private fun suffix(group: Int): String {
 
 fun formatDuration(seconds: Double): String {
     val total = seconds.toLong().coerceAtLeast(0)
-    val h = total / 3600
+    val d = total / 86_400
+    val h = (total % 86_400) / 3600
     val m = (total % 3600) / 60
     val s = total % 60
     return when {
+        d == 1L -> "1 Tag $h h"
+        d > 1 -> "$d Tage $h h"
         h > 0 -> "$h h ${m.toString().padStart(2, '0')} min"
         m > 0 -> "$m min ${s.toString().padStart(2, '0')} s"
         else -> "$s s"
+    }
+}
+
+/** Knappe Restzeit für enge Stellen wie das Galaxie-Dock: "2 Tg", "11 h", "5 min", "40 s" – aufgerundet, nie 0. */
+fun formatDurationShort(seconds: Double): String {
+    val s = ceil(seconds).coerceAtLeast(1.0)
+    return when {
+        s > 48 * 3600 -> "${ceil(s / 86_400).toLong()} Tg"
+        s > 3600 -> "${ceil(s / 3600).toLong()} h"
+        s > 60 -> "${ceil(s / 60).toLong()} min"
+        else -> "${s.toLong()} s"
     }
 }
 

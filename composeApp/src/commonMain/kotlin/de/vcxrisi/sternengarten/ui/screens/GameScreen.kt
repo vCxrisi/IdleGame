@@ -2,11 +2,13 @@ package de.vcxrisi.sternengarten.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -20,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -30,8 +33,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import de.vcxrisi.sternengarten.game.engine.Balance
 import de.vcxrisi.sternengarten.game.engine.BoardAnalysis
 import de.vcxrisi.sternengarten.game.engine.GameEvent
+import de.vcxrisi.sternengarten.game.model.GalaxyKind
 import de.vcxrisi.sternengarten.game.model.GameState
 import de.vcxrisi.sternengarten.game.model.SparkStyle
 import de.vcxrisi.sternengarten.game.model.StarType
@@ -43,9 +48,14 @@ import de.vcxrisi.sternengarten.ui.hud.BigBangSheet
 import de.vcxrisi.sternengarten.ui.hud.BuildBar
 import de.vcxrisi.sternengarten.ui.hud.CapsuleRevealOverlay
 import de.vcxrisi.sternengarten.ui.hud.EventBanner
+import de.vcxrisi.sternengarten.ui.hud.FieldBuyPanel
 import de.vcxrisi.sternengarten.ui.hud.FirstStepsHint
+import de.vcxrisi.sternengarten.ui.hud.GalaxiesSheet
+import de.vcxrisi.sternengarten.ui.hud.GalaxyDock
 import de.vcxrisi.sternengarten.ui.hud.GalaxySelectScreen
+import de.vcxrisi.sternengarten.ui.hud.GlassPanel
 import de.vcxrisi.sternengarten.ui.hud.GoalsSheet
+import de.vcxrisi.sternengarten.ui.hud.LoadNoticeDialog
 import de.vcxrisi.sternengarten.ui.hud.LoginRewardDialog
 import de.vcxrisi.sternengarten.ui.hud.OfflineDialog
 import de.vcxrisi.sternengarten.ui.hud.RepairDialog
@@ -54,14 +64,19 @@ import de.vcxrisi.sternengarten.ui.hud.ShopSheet
 import de.vcxrisi.sternengarten.ui.hud.StarInfoPanel
 import de.vcxrisi.sternengarten.ui.hud.ToastStack
 import de.vcxrisi.sternengarten.ui.hud.TopBar
+import de.vcxrisi.sternengarten.ui.hud.Txt
+import de.vcxrisi.sternengarten.ui.hud.dockVisible
 import de.vcxrisi.sternengarten.ui.hud.sparkPreviewColor
 import de.vcxrisi.sternengarten.ui.render.Camera
+import de.vcxrisi.sternengarten.ui.render.CameraPose
 import de.vcxrisi.sternengarten.ui.render.GardenView
 import de.vcxrisi.sternengarten.ui.render.HexLayout
 import de.vcxrisi.sternengarten.ui.render.Starfield
 import de.vcxrisi.sternengarten.ui.render.cometPosition
 import de.vcxrisi.sternengarten.ui.render.moteColor
 import de.vcxrisi.sternengarten.ui.theme.Palette
+import de.vcxrisi.sternengarten.ui.theme.Type
+import de.vcxrisi.sternengarten.ui.theme.galaxyColor
 import de.vcxrisi.sternengarten.ui.theme.starColors
 import kotlin.math.ln
 import kotlin.random.Random
@@ -80,6 +95,12 @@ private class CometClock {
         }
         return (clock - start) / comet.duration.toFloat()
     }
+
+    /** Vergisst den Kometen, etwa beim Wechsel in eine andere Galaxie. */
+    fun reset() {
+        id = -1L
+        lastScreen = Offset.Zero
+    }
 }
 
 @Composable
@@ -87,7 +108,11 @@ fun GameScreen(controller: GameController) {
     val density = LocalDensity.current
     val layout = remember(density) { HexLayout(with(density) { 36.dp.toPx() }) }
     val camera = remember { Camera() }
-    val starfield = remember { Starfield() }
+    // Jede Galaxieart hat ihren eigenen Sternenhimmel; die Spiralgalaxie behält den vertrauten.
+    val starfields = remember { HashMap<GalaxyKind, Starfield>() }
+    // Kameraposition je Galaxie, damit ein Wechsel zurück dort weitermacht, wo man war.
+    val poses = remember { HashMap<GalaxyKind, CameraPose>() }
+    val seen = remember { intArrayOf(controller.switchCount, controller.layoutVersion) }
     val particles = remember { ParticleSystem() }
     val cometClock = remember { CometClock() }
     val haptics = LocalHapticFeedback.current
@@ -101,7 +126,23 @@ fun GameScreen(controller: GameController) {
                 val dt = ((now - last) / 1_000_000_000f).coerceIn(0f, 0.1f)
                 last = now
                 controller.frame(dt)
+                if (controller.switchCount != seen[0]) {
+                    seen[0] = controller.switchCount
+                    controller.previousGalaxy?.let { poses[it] = camera.pose() }
+                    particles.clear()
+                    cometClock.reset()
+                    val pose = poses[controller.state.activeGalaxy]
+                    if (pose != null) camera.moveTo(pose) else camera.requestFit(animate = false)
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+                if (controller.layoutVersion != seen[1]) {
+                    // Urknall oder neue Gesetze: ein neuer Garten, die Kamera folgt ihm wieder.
+                    seen[1] = controller.layoutVersion
+                    camera.autoFit = true
+                    camera.requestFit(animate = false)
+                }
                 particles.update(dt)
+                camera.step(dt)
                 camera.shake = (camera.shake - dt * 28f).coerceAtLeast(0f)
                 emitAmbient(controller.state, controller.analysis, layout, particles, dt)
             }
@@ -172,6 +213,17 @@ fun GameScreen(controller: GameController) {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
                 is GameEvent.PurchaseGranted -> haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                is GameEvent.FieldBought -> {
+                    val c = layout.center(event.hex)
+                    val color = galaxyColor(controller.state.activeGalaxy)
+                    particles.burst(c, 36, unit * 2.6f, unit * 0.06f, color, 1.0f)
+                    particles.shockwave(c, unit * 1.6f, color, 0.8f)
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    // Der Garten ist gewachsen: weich nachführen, solange der Spieler die Kamera nicht selbst lenkt.
+                    if (camera.autoFit) camera.requestFit(animate = true)
+                }
+                is GameEvent.GalaxyUnlocked -> haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                // Ereignisse geparkter Galaxien (InBackground) bleiben ohne Effekt.
                 else -> Unit
             }
         }
@@ -186,31 +238,55 @@ fun GameScreen(controller: GameController) {
         cometClock.lastScreen = Offset(p.x * viewport.width, p.y * viewport.height)
     }
 
+    val kind = state.activeGalaxy
+    val fieldPrice = Balance.fieldCost(state)
+    val switchAge = clock - controller.switchedAt
+
     Box(Modifier.fillMaxSize().onSizeChanged { viewport = it.toSize() }) {
         GardenView(
             state = state,
             analysis = controller.analysis,
             selectedHex = controller.selectedHex,
+            frontier = controller.frontier,
+            selectedField = controller.selectedField,
+            fieldPrice = fieldPrice,
+            fieldAffordable = state.stardust >= fieldPrice,
             camera = camera,
             layout = layout,
-            starfield = starfield,
+            starfield = starfields.getOrPut(kind) { Starfield(7 + 31 * kind.ordinal) },
             particles = particles,
             clock = clock,
             cometProgress = cometProgress,
+            switchAge = switchAge,
             onTapCell = controller::tapCell,
             onTapComet = controller::catchComet,
         )
+
+        if (switchAge in 0f..TITLE_CARD_SECONDS) {
+            GalaxyTitleCard(state, switchAge, Modifier.align(Alignment.Center).offset(y = (-80).dp))
+        }
 
         Column(
             Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            TopBar(state, controller.analysis, { controller.sheet = Sheet.SHOP }, Modifier.padding(12.dp))
+            TopBar(
+                state, controller.analysis, controller.bridgeInflow[kind] ?: 0.0,
+                onCrystals = { controller.sheet = Sheet.SHOP },
+                onGalaxies = { controller.sheet = Sheet.GALAXIES },
+                modifier = Modifier.padding(12.dp),
+                dock = if (dockVisible(state)) ({ GalaxyDock(controller, clock) }) else null,
+            )
             state.event?.let { EventBanner(it, Modifier.padding(horizontal = 12.dp).padding(bottom = 8.dp)) }
             ToastStack(controller.toasts, clock, Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             Spacer(Modifier.weight(1f))
-            FirstStepsHint(state, Modifier.padding(12.dp))
-            controller.selectedHex?.let { StarInfoPanel(controller, it, clock, Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+            val selectedHex = controller.selectedHex
+            val selectedField = controller.selectedField
+            when {
+                selectedHex != null -> StarInfoPanel(controller, selectedHex, clock, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                selectedField != null -> FieldBuyPanel(controller, selectedField, clock, Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                else -> FirstStepsHint(state, Modifier.padding(12.dp))
+            }
             BuildBar(controller, clock)
             Spacer(Modifier.height(8.dp))
             ActionBar(controller)
@@ -222,6 +298,7 @@ fun GameScreen(controller: GameController) {
             Sheet.GOALS -> GoalsSheet(controller)
             Sheet.SHOP -> ShopSheet(controller, clock)
             Sheet.BIG_BANG -> BigBangSheet(controller)
+            Sheet.GALAXIES -> GalaxiesSheet(controller, clock)
             Sheet.NONE -> Unit
         }
 
@@ -230,7 +307,8 @@ fun GameScreen(controller: GameController) {
         val repair = controller.repairNotice
         when {
             repair != null -> RepairDialog(repair, controller::dismissRepairNotice)
-            offline != null -> OfflineDialog(offline, controller::dismissOfflineReport)
+            controller.loadNotice -> LoadNoticeDialog(controller::dismissLoadNotice)
+            offline != null -> OfflineDialog(offline, kind, clock, controller::dismissOfflineReport)
             // Die Tagesbelohnung begrüßt den Spieler, sobald kein anderer Dialog offen ist.
             login != null && state.lawChoices.isEmpty() -> LoginRewardDialog(state.loginStreak, login) {
                 controller.claimLoginReward()
@@ -244,6 +322,27 @@ fun GameScreen(controller: GameController) {
         }
 
         if (state.lawChoices.isNotEmpty()) GalaxySelectScreen(controller, clock)
+    }
+}
+
+/** So lange steht die Titelkarte nach einem Galaxiewechsel. */
+private const val TITLE_CARD_SECONDS = 1.5f
+
+/** Kurze Titelkarte nach einem Galaxiewechsel: blendet ein, steht kurz und verblasst. */
+@Composable
+private fun GalaxyTitleCard(state: GameState, age: Float, modifier: Modifier = Modifier) {
+    val alpha = when {
+        age < 0.15f -> age / 0.15f
+        age < 1.1f -> 1f
+        else -> ((TITLE_CARD_SECONDS - age) / (TITLE_CARD_SECONDS - 1.1f)).coerceIn(0f, 1f)
+    }
+    val color = galaxyColor(state.activeGalaxy)
+    GlassPanel(modifier.alpha(alpha), tint = color.copy(alpha = 0.7f), padding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Txt(state.activeGalaxy.displayName.uppercase(), Type.Small, color = color)
+            Txt(state.galaxyName, Type.Title)
+            if (state.galaxyNumber > 0) Txt(state.law.displayName, Type.Small, color = Color.hsv(state.law.hue, 0.45f, 1f))
+        }
     }
 }
 
