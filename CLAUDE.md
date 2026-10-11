@@ -80,8 +80,9 @@ Sternengarten ist ein Idle-Spiel für Android und iOS (Desktop zum Testen), geba
   - Hintergrund: Ein echter TestFlight-Spielstand lief einmal auf ∞/NaN über und zeigte danach Sternenstaub 0.
 - **Balancing-Schutz:** `BalanceSimulationTest` lässt einen gierigen Bot zehn Galaxien nacheinander spielen und prüft, dass das Wachstum der Dunklen Materie abbremst; `MultiGalaxySimulationTest` spielt alle fünf Galaxien parallel mit Brücken und vergleicht mit dem Einzelbot. Nach jeder Balancing-Änderung ausführen.
 
-## iOS und CI
+## iOS, Android und CI
 
 - `codemagic.yaml` enthält den Workflow `ios-testflight`: Er baut, signiert über `fetch-signing-files --create` und lädt zu TestFlight hoch. Die Build-Nummer kommt aus `$BUILD_NUMBER`.
+- Android: Workflows `android-aab` (nur Bundle, für den ersten manuellen Upload) und `android-google-play` (Upload in den internen Test, `versionCode` = höchster in Play + 1). Die Release-Signierung liest den Upload-Schlüssel aus Codemagics `CM_KEYSTORE_*`/`CM_KEY_*`-Variablen, `versionCode` aus `VERSION_CODE`; ohne diese Variablen entsteht lokal ein unsigniertes Release mit `versionCode` 1. Einrichtung: `docs/GOOGLE_PLAY.md`. Keystore und Dienstkonto-JSON nie ins Repo legen oder ausgeben.
 - `iosApp/Configuration/Config.xcconfig` muss ASCII-only bleiben, weil das xcodeproj-Gem bei Umlauten abstürzte. Dort steht auch `MARKETING_VERSION`.
 - `docs/TESTFLIGHT.md` beschreibt die Einrichtung von Apple, App Store Connect und Codemagic. Sie ist auch als Auftrag für eine lokale Claude-Sitzung mit Chrome geschrieben. Den Inhalt der `.p8` und des privaten Zertifikatsschlüssels nie lesen oder ausgeben.

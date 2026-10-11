@@ -109,6 +109,13 @@ Die angezeigten Preise kommen live aus dem Store. Die Richtpreise erscheinen nur
 - **Build-Nummer:** Die Codemagic-Variable `$BUILD_NUMBER` wird als `CURRENT_PROJECT_VERSION` eingetragen. Die Version (`MARKETING_VERSION`) steht in `iosApp/Configuration/Config.xcconfig`.
 - **Komplette Klick-Anleitung** für Apple Developer, App Store Connect und Codemagic: [`docs/TESTFLIGHT.md`](docs/TESTFLIGHT.md). Sie ist auch als Auftrag für eine Claude-Sitzung mit Chrome-Erweiterung geschrieben.
 
+## Android-Build mit Codemagic (Google Play)
+
+- **Android AAB:** baut ein signiertes App-Bundle als Artefakt, gedacht für den ersten Upload von Hand.
+- **Android Google Play:** baut, signiert und lädt in den internen Test-Track hoch. Der `versionCode` ist der höchste in Google Play + 1.
+- Der Upload-Schlüssel liegt in Codemagic (Keystore-Referenz **`sternengarten_upload`**), nie im Repository. Das Dienstkonto steht im Secret `GCLOUD_SERVICE_ACCOUNT_CREDENTIALS` (Gruppe **`google-play`**).
+- **Komplette Anleitung:** [`docs/GOOGLE_PLAY.md`](docs/GOOGLE_PLAY.md).
+
 ## Projekt öffnen und starten
 
 **Voraussetzungen:**

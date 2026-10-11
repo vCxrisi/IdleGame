@@ -54,6 +54,10 @@ kotlin {
     }
 }
 
+// Release-Signierung für Google Play. Der Upload-Schlüssel liegt nie im Repo:
+// Codemagic stellt ihn über `android_signing` bereit und setzt diese Variablen selbst.
+val releaseKeystore = providers.environmentVariable("CM_KEYSTORE_PATH").orNull
+
 android {
     namespace = "de.vcxrisi.sternengarten"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -62,7 +66,8 @@ android {
         applicationId = "de.vcxrisi.sternengarten"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
+        // Jeder Play-Upload braucht einen höheren versionCode; Codemagic setzt VERSION_CODE (siehe codemagic.yaml).
+        versionCode = providers.environmentVariable("VERSION_CODE").orNull?.toIntOrNull() ?: 1
         versionName = "1.0"
     }
     packaging {
@@ -70,9 +75,21 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        releaseKeystore?.let { path ->
+            create("release") {
+                storeFile = file(path)
+                storePassword = providers.environmentVariable("CM_KEYSTORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("CM_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("CM_KEY_PASSWORD").get()
+            }
+        }
+    }
     buildTypes {
         getByName("release") {
             isMinifyEnabled = false
+            // Ohne Schlüssel (lokal) entsteht ein unsigniertes Release; der Codemagic-Workflow bricht dann ab.
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

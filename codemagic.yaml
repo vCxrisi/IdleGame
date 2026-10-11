@@ -1,11 +1,105 @@
 # Codemagic: baut die iOS-App und lädt sie zu App Store Connect / TestFlight hoch.
 # Einrichtung Schritt für Schritt: docs/TESTFLIGHT.md
+# Für Android gibt es zwei Workflows, Einrichtung in docs/GOOGLE_PLAY.md:
+#   - "Android AAB": baut nur das signierte App-Bundle (für den allerersten, manuellen Upload).
+#   - "Android Google Play": baut und lädt in den internen Test-Track hoch.
 #
 # Voraussetzungen in Codemagic:
 #   - App Store Connect API-Schlüssel unter Integrationen → Developer Portal mit dem Namen "Codemagic"
 #   - Umgebungsvariablen-Gruppe "code-signing" mit dem Secret CERTIFICATE_PRIVATE_KEY
 #     (RSA-Schlüssel für das Distribution-Zertifikat, siehe docs/TESTFLIGHT.md)
+definitions:
+  android_scripts:
+    - &android_sdk
+      name: Android-SDK für Gradle bekannt machen
+      script: |
+        SDK_DIR="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+        if [ -n "$SDK_DIR" ]; then
+          echo "sdk.dir=$SDK_DIR" > "$CM_BUILD_DIR/local.properties"
+          echo "Android-SDK: $SDK_DIR"
+        else
+          echo "Kein Android-SDK gefunden (ANDROID_SDK_ROOT/ANDROID_HOME leer)."
+        fi
+    - &android_keystore_check
+      name: Upload-Schlüssel prüfen
+      script: |
+        # Ohne Schlüssel baut Gradle ein unsigniertes Bundle, das Google Play ablehnt.
+        if [ -z "$CM_KEYSTORE_PATH" ]; then
+          echo "Kein Upload-Schlüssel: In Codemagic unter Code signing identities → Android keystores"
+          echo "einen Keystore mit dem Referenznamen 'sternengarten_upload' hochladen (docs/GOOGLE_PLAY.md)."
+          exit 1
+        fi
+    - &android_bundle
+      name: App-Bundle bauen
+      script: |
+        set -e
+        cd "$CM_BUILD_DIR"
+        echo "versionCode: $VERSION_CODE"
+        ./gradlew :composeApp:bundleRelease
+
 workflows:
+  android-aab:
+    name: Android AAB
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      android_signing:
+        - sternengarten_upload
+      java: 17
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+    scripts:
+      - *android_sdk
+      - *android_keystore_check
+      - name: versionCode setzen
+        script: |
+          # Eigener Zähler dieses Workflows. Nur für den ersten, manuellen Upload gedacht.
+          echo "VERSION_CODE=$BUILD_NUMBER" >> "$CM_ENV"
+      - *android_bundle
+    artifacts:
+      - composeApp/build/outputs/bundle/release/*.aab
+
+  android-google-play:
+    name: Android Google Play
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      android_signing:
+        - sternengarten_upload
+      groups:
+        # Secret GCLOUD_SERVICE_ACCOUNT_CREDENTIALS: JSON-Schlüssel des Play-Dienstkontos
+        - google-play
+      vars:
+        PACKAGE_NAME: "de.vcxrisi.sternengarten"
+      java: 17
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+    scripts:
+      - *android_sdk
+      - *android_keystore_check
+      - name: versionCode setzen
+        script: |
+          set -e
+          # Höchster versionCode aller Tracks in Google Play + 1, damit jeder Upload angenommen wird.
+          LATEST=$(google-play get-latest-build-number --package-name "$PACKAGE_NAME" || true)
+          if [ -z "$LATEST" ]; then
+            echo "Noch kein Build in Google Play gefunden. Das erste Bundle von Hand hochladen (Workflow 'Android AAB')."
+            exit 1
+          fi
+          echo "VERSION_CODE=$((LATEST + 1))" >> "$CM_ENV"
+      - *android_bundle
+    artifacts:
+      - composeApp/build/outputs/bundle/release/*.aab
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        # Entwurf, solange die App in der Play Console noch nicht veröffentlicht ist.
+        # Nach der ersten Freigabe auf "completed" stellen, dann sehen Tester den Build sofort.
+        submit_as_draft: true
+
   ios-testflight:
     name: iOS TestFlight
     instance_type: mac_mini_m2
