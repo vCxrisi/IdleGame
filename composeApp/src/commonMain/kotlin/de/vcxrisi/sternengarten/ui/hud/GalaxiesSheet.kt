@@ -308,9 +308,10 @@ private fun BridgesTab(controller: GameController, time: Float) {
     }
     // Eine Galaxie könnte inzwischen fehlen (etwa nach einem Neustart der Übersicht) – dann neu wählen.
     if (from !in kinds) from = kinds.first()
-    // Ist das Ziel gleich der Quelle (etwa nach Wahl der Quelle), springt es auf eine andere Galaxie –
-    // bevorzugt auf eine, in die noch keine Brücke führt.
-    if (to !in kinds || to == from) {
+    // Ist das Ziel gleich der Quelle (etwa nach Wahl der Quelle) oder führt schon eine Brücke hinein (etwa gleich
+    // nach dem Bau), springt es auf eine andere Galaxie – bevorzugt auf eine, in die noch keine Brücke führt.
+    val targetTaken = state.bridges.any { it.to == to }
+    if (to !in kinds || to == from || (targetTaken && kinds.any { k -> k != from && state.bridges.none { it.to == k } })) {
         to = kinds.firstOrNull { k -> k != from && state.bridges.none { it.to == k } } ?: kinds.first { it != from }
     }
     Txt("Von", Type.Small)

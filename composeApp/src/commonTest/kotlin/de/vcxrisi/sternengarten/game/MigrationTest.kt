@@ -17,6 +17,7 @@ import de.vcxrisi.sternengarten.game.model.StarBridge
 import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
+import de.vcxrisi.sternengarten.game.save.LoadNotice
 import de.vcxrisi.sternengarten.game.save.LoadResult
 import de.vcxrisi.sternengarten.game.save.SaveBackup
 import de.vcxrisi.sternengarten.game.save.SaveFormat
@@ -247,7 +248,7 @@ class MigrationTest {
         val unreadable = v3.replace("\"SPIRAL\"", "\"QUASAR_CLUSTER\"")
         assertNotEquals(v3, unreadable)
         val fallback = SaveFormat.choose(unreadable, v1, NOW)
-        assertEquals(legacy, fallback.state)
+        assertEquals(legacy.copy(fallbackFromBackup = SaveFormat.unreadableKey(NOW)), fallback.state)
         assertTrue(fallback.unreadable)
         assertEquals(SaveBackup(SaveFormat.unreadableKey(NOW), unreadable), fallback.backup)
         val nothing = SaveFormat.choose(unreadable, null, NOW)
@@ -260,27 +261,46 @@ class MigrationTest {
     }
 
     @Test
-    fun theMostRecentlySavedStateWins() {
+    fun readableV3AlwaysWinsRegardlessOfClock() {
+        // Auch wenn v1 (älterer Build, vorgestellte Uhr) einen späteren Zeitstempel trägt: v3 gewinnt, v1 bleibt liegen.
         val current = GameState(stardust = 300.0, balanceVersion = 3, lastSavedEpochMs = 2_000)
-        val olderBuild = GameState(stardust = 900.0, balanceVersion = 2, lastSavedEpochMs = 5_000)
-        val v3 = SaveFormat.encode(current)
-        val v1 = SaveFormat.encode(olderBuild)
+        val olderBuild = GameState(stardust = 900.0, balanceVersion = 2, lastSavedEpochMs = 99_000)
+        val result = SaveFormat.choose(SaveFormat.encode(current), SaveFormat.encode(olderBuild), NOW)
+        assertEquals(current, result.state)
+        assertNull(result.backup)
+        assertNull(result.notice)
+    }
 
-        // Ein älterer Build hat nach dem Update weitergespielt: sein v1-Stand ist neuer und gewinnt.
-        assertEquals(olderBuild, SaveFormat.choose(v3, v1, NOW).state)
-        // Ohne neueren v1-Stand bleibt es beim v3-Stand.
-        assertEquals(current, SaveFormat.choose(v3, SaveFormat.encode(olderBuild.copy(lastSavedEpochMs = 1_000)), NOW).state)
+    @Test
+    fun unreadableSaveIsRestoredOnceReadable() {
+        val real = GameState(stardust = 5_000.0, balanceVersion = 3, crystals = 777)
+        val legacy = GameState(stardust = 100.0, balanceVersion = 2)
+        val unreadable = SaveFormat.encode(real).replace("\"SPIRAL\"", "\"QUASAR_CLUSTER\"")
+        val storage = HashMap<String, String>()
 
-        // Eine früher unlesbare Sicherung, die jetzt lesbar und neuer ist, wird wiederhergestellt.
-        val rescued = GameState(stardust = 5_000.0, balanceVersion = 3, lastSavedEpochMs = 9_000)
-        val key = SaveFormat.unreadableKey(1)
-        val restored = SaveFormat.choose(v3, v1, NOW, backups = mapOf(key to SaveFormat.encode(rescued)))
-        assertEquals(rescued, restored.state)
-        assertEquals(key, restored.restoredBackupKey)
-        assertFalse(restored.unreadable)
-        // Eine weiterhin unlesbare oder ältere Sicherung bleibt liegen.
-        assertNull(SaveFormat.choose(v3, v1, NOW, backups = mapOf(key to "kaputt")).restoredBackupKey)
-        assertNull(SaveFormat.choose(v3, null, NOW, backups = mapOf(key to SaveFormat.encode(rescued.copy(lastSavedEpochMs = 10)))).restoredBackupKey)
+        // 1. Ein Build kann den Stand nicht lesen: sichern, v1 als Notbehelf laden – markiert mit der Sicherung.
+        val fallback = SaveFormat.choose(unreadable, SaveFormat.encode(legacy), NOW, storage::containsKey, storage::get)
+        assertEquals(LoadNotice.UNREADABLE, fallback.notice)
+        val backupKey = fallback.backup!!.key
+        assertEquals(backupKey, fallback.state!!.fallbackFromBackup)
+        storage[backupKey] = SaveFormat.encode(real) // Ein späteres Update kann die Sicherung wieder lesen.
+
+        // 2. Mit dem Notbehelf wird weitergespielt und gespeichert …
+        val played = SaveFormat.encode(fallback.state!!.copy(stardust = 42.0))
+        // … bis die Sicherung lesbar ist: Sie wird geladen, der Notbehelf seinerseits gesichert.
+        val restored = SaveFormat.choose(played, SaveFormat.encode(legacy), NOW + 1, storage::containsKey, storage::get)
+        assertEquals(LoadNotice.RESTORED, restored.notice)
+        assertEquals(real, restored.state)
+        assertNull(restored.state!!.fallbackFromBackup)
+        assertEquals(backupKey, restored.restoredBackupKey)
+        assertEquals(played, restored.backup!!.raw)
+        assertNotEquals(backupKey, restored.backup!!.key)
+
+        // Ist die Sicherung weiterhin unlesbar oder fehlt sie, bleibt es beim Notbehelf.
+        storage[backupKey] = unreadable
+        assertNull(SaveFormat.choose(played, null, NOW, storage::containsKey, storage::get).notice)
+        storage.remove(backupKey)
+        assertEquals(42.0, SaveFormat.choose(played, null, NOW, storage::containsKey, storage::get).state!!.stardust)
     }
 
     @Test

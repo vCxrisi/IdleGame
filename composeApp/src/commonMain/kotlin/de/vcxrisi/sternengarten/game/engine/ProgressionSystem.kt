@@ -157,26 +157,31 @@ class ProgressionSystem(private val random: Random) {
         val kind = state.activeGalaxy
         val k = kind.costScale
         val maxFields = Balance.maxFieldCount(state.law).toDouble()
-        // Die Belohnung wächst nur so lange mit, wie auch die Ziele schwerer werden – sonst lohnte es sich,
-        // späte Galaxien nur für die gedeckelten Ziele immer wieder zu kollabieren.
-        val rewardCycle = min(g, Balance.GOAL_REWARD_MAX_CYCLE)
-        val darkMatter = ceil((rewardCycle + 1) / 2.0 * kind.goalDarkMatterMult)
+        fun target(goal: GoalKind, c: Int): Double = when (goal) {
+            GoalKind.RUN_STARDUST -> 2e6 * 5.0.pow(c - 1) * k
+            GoalKind.STARS_AT_ONCE -> minOf(12.0 + 4 * (c - 1), 60.0, maxFields)
+            GoalKind.RUN_SUPERNOVAS -> 3.0 + 2 * c
+            GoalKind.STAR_LEVEL -> 15.0 + 5 * c
+            GoalKind.ACTIVE_CONSTELLATIONS -> min(3.0 + c / 2, 8.0)
+            GoalKind.PRODUCTION_RATE -> 500.0 * 8.0.pow(c - 1) * k
+            GoalKind.FIELDS_OWNED ->
+                min(Balance.startFieldCount(state, kind, state.law) + 6.0 + 3 * c, maxFields)
+            GoalKind.EXCLUSIVE_STARS -> min(1.0 + c / 3, 4.0)
+            GoalKind.WHITE_DWARFS -> min(2.0 + c, 10.0)
+        }
+        // Die Belohnung wächst nur so lange mit, wie das Ziel selbst schwerer wird: Ist sein Ziel gedeckelt, bleibt
+        // auch die Dunkle Materie stehen – sonst lohnte es sich, späte Galaxien nur dafür immer wieder zu kollabieren.
+        fun rewardCycle(goal: GoalKind): Int {
+            val capped = target(goal, g)
+            var c = g
+            while (c > 1 && target(goal, c - 1) == capped) c--
+            return c
+        }
         // Die besondere Sternart erst als Ziel, wenn sie schon freigeschaltet ist – sonst bleibt es unerreichbar.
         val exclusiveReady = kind.exclusiveStar?.let { it in state.unlocked } == true
         return GoalKind.entries.filter { it != GoalKind.EXCLUSIVE_STARS || exclusiveReady }.shuffled(random).take(3).map { goal ->
-            val target = when (goal) {
-                GoalKind.RUN_STARDUST -> 2e6 * 5.0.pow(g - 1) * k
-                GoalKind.STARS_AT_ONCE -> minOf(12.0 + 4 * (g - 1), 60.0, maxFields)
-                GoalKind.RUN_SUPERNOVAS -> 3.0 + 2 * g
-                GoalKind.STAR_LEVEL -> 15.0 + 5 * g
-                GoalKind.ACTIVE_CONSTELLATIONS -> min(3.0 + g / 2, 8.0)
-                GoalKind.PRODUCTION_RATE -> 500.0 * 8.0.pow(g - 1) * k
-                GoalKind.FIELDS_OWNED ->
-                    min(Balance.startFieldCount(state, kind, state.law) + 6.0 + 3 * g, maxFields)
-                GoalKind.EXCLUSIVE_STARS -> min(1.0 + g / 3, 4.0)
-                GoalKind.WHITE_DWARFS -> min(2.0 + g, 10.0)
-            }
-            GalaxyGoal(goal, target, darkMatter, crystals = 15)
+            val darkMatter = ceil((rewardCycle(goal) + 1) / 2.0 * kind.goalDarkMatterMult)
+            GalaxyGoal(goal, target(goal, g), darkMatter, crystals = 15)
         }
     }
 

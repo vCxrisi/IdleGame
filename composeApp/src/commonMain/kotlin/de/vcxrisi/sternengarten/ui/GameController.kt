@@ -29,6 +29,7 @@ import de.vcxrisi.sternengarten.game.model.StarType
 import de.vcxrisi.sternengarten.game.model.StoreProduct
 import de.vcxrisi.sternengarten.game.model.Upgrade
 import de.vcxrisi.sternengarten.game.model.runOf
+import de.vcxrisi.sternengarten.game.save.LoadNotice
 import de.vcxrisi.sternengarten.game.save.RepairReport
 import de.vcxrisi.sternengarten.game.save.SaveMigration
 import de.vcxrisi.sternengarten.game.save.SaveRepository
@@ -66,8 +67,8 @@ class GameController(
     /** Hinweis, falls ein entgleister Spielstand beim Laden repariert wurde. */
     var repairNotice by mutableStateOf<RepairReport?>(null)
 
-    /** Der aktuelle Spielstand war unlesbar; geladen wurde ein älterer, der unlesbare ist gesichert. */
-    var loadNotice by mutableStateOf(false)
+    /** Hinweis, wenn beim Laden ein unlesbarer Stand gesichert oder eine Sicherung wiederhergestellt wurde. */
+    var loadNotice by mutableStateOf<LoadNotice?>(null)
         private set
 
     var state by mutableStateOf(loadState())
@@ -152,9 +153,14 @@ class GameController(
     /** Lädt den Spielstand und bringt ihn auf den aktuellen Balancing-Stand – noch vor der Offline-Simulation. */
     private fun loadState(): GameState {
         val loaded = repository.load()
-        loadNotice = loaded.unreadable
+        loadNotice = loaded.notice
         val saved = loaded.state
-            ?: return GameState(lastSavedEpochMs = nowEpochMillis(), balanceVersion = SaveMigration.CURRENT_BALANCE_VERSION)
+            ?: return GameState(
+                lastSavedEpochMs = nowEpochMillis(),
+                balanceVersion = SaveMigration.CURRENT_BALANCE_VERSION,
+                // Neues Spiel, weil der eigentliche Stand unlesbar war: Er wird wiederhergestellt, sobald er lesbar ist.
+                fallbackFromBackup = loaded.backup?.key?.takeIf { loaded.unreadable },
+            )
         val (migrated, report) = SaveMigration.migrate(saved)
         repairNotice = report
         return migrated
@@ -165,11 +171,11 @@ class GameController(
     }
 
     fun dismissLoadNotice() {
-        loadNotice = false
+        loadNotice = null
     }
 
     init {
-        catchUp(nowEpochMillis(), showReport = repairNotice == null && !loadNotice)
+        catchUp(nowEpochMillis(), showReport = repairNotice == null && loadNotice == null)
         refreshDay(force = true)
         refreshFrontier()
     }

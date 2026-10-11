@@ -6,27 +6,31 @@ import kotlinx.serialization.json.Json
 /** Sicherung eines unlesbaren Spielstands: der Rohtext [raw] unter dem noch unbenutzten Schlüssel [key]. */
 data class SaveBackup(val key: String, val raw: String)
 
+/** Was beim Laden Besonderes passiert ist – dafür erscheint ein Hinweis. */
+enum class LoadNotice {
+    /** Der aktuelle Stand war unlesbar: Er ist gesichert, geladen wurde der Stand von vor dem Update (oder nichts). */
+    UNREADABLE,
+
+    /** Eine früher unlesbare Sicherung ist wieder lesbar und wurde geladen; der Notbehelf-Stand ist gesichert. */
+    RESTORED,
+}
+
 /**
- * Ergebnis des Ladens. [state] ist `null`, wenn ein neues Spiel beginnt. Mit [backup] war der aktuelle Stand
- * unlesbar: Er wird gesichert, geladen wird der ältere v1-Stand, und der Spieler bekommt einen Hinweis.
+ * Ergebnis des Ladens. [state] ist `null`, wenn ein neues Spiel beginnt.
+ * [backup]: Rohtext, den der Aufrufer vor allem anderen unter einem neuen Schlüssel sichern muss.
+ * [restoredBackupKey]: Sicherung, aus der [state] stammt; sie darf erst nach dem nächsten erfolgreichen
+ * Speichern gelöscht werden.
  */
 data class LoadResult(
     val state: GameState?,
     val backup: SaveBackup? = null,
-    /** Schlüssel einer früheren Sicherung, aus der [state] stammt; sie wird nach dem Laden entfernt. */
     val restoredBackupKey: String? = null,
+    val notice: LoadNotice? = null,
 ) {
-    /** Ob der aktuelle Spielstand nicht gelesen werden konnte – dann erscheint der Hinweis-Dialog. */
-    val unreadable: Boolean get() = backup != null
+    /** Ob der aktuelle Spielstand nicht gelesen werden konnte. */
+    val unreadable: Boolean get() = notice == LoadNotice.UNREADABLE
 }
 
-/**
- * Speicherformat: das JSON von [GameState] in den plattformeigenen Einstellungen.
- *
- * Seit den parallelen Galaxien steht der Stand unter [KEY]. Der frühere Schlüssel [LEGACY_KEY] wird nur noch
- * gelesen, nie mehr geschrieben: Ein älterer Build kennt die neuen Enum-Konstanten nicht, könnte den neuen Stand
- * also nicht dekodieren und würde ihn per Autosave überschreiben. So liest er stattdessen seinen alten Stand.
- */
 object SaveFormat {
     const val KEY = "sternengarten.save.v3"
     const val LEGACY_KEY = "sternengarten.save.v1"
@@ -50,42 +54,47 @@ object SaveFormat {
     fun unreadableKey(epochMs: Long): String = UNREADABLE_KEY_PREFIX + epochMs
 
     /**
-     * Wählt aus den gespeicherten Rohtexten den Stand, der geladen wird – den zuletzt gespeicherten
-     * (`lastSavedEpochMs`), bei Gleichstand v3 vor einer Sicherung vor v1:
-     * - [v3]: der aktuelle Stand. Fehlt er, kommt der Stand von vor dem Update ([v1]) und wird danach migriert.
-     * - [v1]: Hat ein älterer Build nach dem Update weitergespielt, ist v1 neuer als v3 und gewinnt.
-     * - [backups]: frühere Sicherungen unlesbarer Stände (Schlüssel → Rohtext). Ist eine inzwischen lesbar
-     *   und neuer als alles andere, wird sie wiederhergestellt ([LoadResult.restoredBackupKey]).
+     * Wählt den Stand, der geladen wird. Die Gerätezeit entscheidet dabei nie – sie lässt sich verstellen:
+     * - [v3] lesbar: v3. Der v1-Stand wird nie gelöscht; hat ein älterer Build dort weitergespielt, bleibt das liegen.
+     * - v3 ist ein Notbehelf ([GameState.fallbackFromBackup]) und dessen Sicherung ist jetzt lesbar ([readBackup]):
+     *   Die Sicherung ist der eigentliche Spielstand und wird geladen. Der Notbehelf kommt seinerseits unter einen
+     *   neuen Schlüssel, damit auch dazwischen Gespieltes nicht verloren geht.
+     * - v3 fehlt: [v1], also der Stand vor dem Update (er wird danach migriert).
      * - v3 vorhanden, aber unlesbar (etwa eine Enum-Konstante aus einem neueren Build): Der Rohtext kommt unter
-     *   einen neuen Schlüssel, der noch nicht vergeben ist ([keyTaken]), damit der Autosave ihn nicht für immer
-     *   überschreibt; der Spieler bekommt einen Hinweis.
+     *   einen neuen Schlüssel, geladen wird v1 (oder nichts) – markiert als Notbehelf für genau diese Sicherung.
      *
-     * Rein: Sichern und Entfernen muss der Aufrufer, mit [LoadResult.backup] und [LoadResult.restoredBackupKey].
+     * Neue Schlüssel sind noch unbenutzt ([keyTaken]), damit nie eine Sicherung überschrieben wird.
+     * Rein: Sichern und Entfernen erledigt der Aufrufer anhand des [LoadResult].
      */
     fun choose(
         v3: String?,
         v1: String?,
         nowMs: Long,
         keyTaken: (String) -> Boolean = { false },
-        backups: Map<String, String> = emptyMap(),
+        readBackup: (String) -> String? = { null },
     ): LoadResult {
-        val current = decodeOrNull(v3)
-        var backup: SaveBackup? = null
-        if (v3 != null && current == null) {
+        fun freeKey(): String {
             var stamp = nowMs
             while (keyTaken(unreadableKey(stamp))) stamp++
-            backup = SaveBackup(unreadableKey(stamp), v3)
+            return unreadableKey(stamp)
         }
-        // Reihenfolge = Vorrang bei Gleichstand.
-        val candidates = ArrayList<Pair<String?, GameState>>()
-        current?.let { candidates += null to it }
-        for ((key, raw) in backups.entries.sortedBy { it.key }) decodeOrNull(raw)?.let { candidates += key to it }
-        decodeOrNull(v1)?.let { candidates += LEGACY_KEY to it }
-        var best: Pair<String?, GameState>? = null
-        for (candidate in candidates) {
-            if (best == null || candidate.second.lastSavedEpochMs > best.second.lastSavedEpochMs) best = candidate
+        if (v3 == null) return LoadResult(decodeOrNull(v1))
+        val current = decodeOrNull(v3)
+        if (current == null) {
+            val key = freeKey()
+            return LoadResult(
+                state = decodeOrNull(v1)?.copy(fallbackFromBackup = key),
+                backup = SaveBackup(key, v3),
+                notice = LoadNotice.UNREADABLE,
+            )
         }
-        val restored = best?.first?.takeIf { it != LEGACY_KEY }
-        return LoadResult(best?.second, backup, restored)
+        val origin = current.fallbackFromBackup ?: return LoadResult(current)
+        val rescued = decodeOrNull(readBackup(origin)) ?: return LoadResult(current)
+        return LoadResult(
+            state = rescued.copy(fallbackFromBackup = null),
+            backup = SaveBackup(freeKey(), v3),
+            restoredBackupKey = origin,
+            notice = LoadNotice.RESTORED,
+        )
     }
 }

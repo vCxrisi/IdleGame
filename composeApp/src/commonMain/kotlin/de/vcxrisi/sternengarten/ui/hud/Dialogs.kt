@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import de.vcxrisi.sternengarten.game.model.ActiveEvent
 import de.vcxrisi.sternengarten.game.model.LoginReward
+import de.vcxrisi.sternengarten.game.save.LoadNotice
 import de.vcxrisi.sternengarten.game.save.RepairReport
 import de.vcxrisi.sternengarten.ui.CapsuleReveal
 import de.vcxrisi.sternengarten.ui.render.drawGlow
@@ -168,23 +169,30 @@ fun BoxScope.RepairDialog(report: RepairReport, onDismiss: () -> Unit) {
     }
 }
 
-/** Hinweis, wenn der aktuelle Spielstand unlesbar war und ein älterer geladen wurde. */
+/** Hinweis nach dem Laden: unlesbarer Stand gesichert oder frühere Sicherung wiederhergestellt. */
 @Composable
-fun BoxScope.LoadNoticeDialog(onDismiss: () -> Unit) {
+fun BoxScope.LoadNoticeDialog(notice: LoadNotice, onDismiss: () -> Unit) {
+    val restored = notice == LoadNotice.RESTORED
     Scrim(null, Modifier.fillMaxSize())
     GlassPanel(
         Modifier.align(Alignment.Center).widthIn(max = 420.dp).padding(20.dp),
         strong = true,
-        tint = Palette.Danger.copy(alpha = 0.7f),
+        tint = (if (restored) Palette.Success else Palette.Danger).copy(alpha = 0.7f),
         padding = PaddingValues(20.dp),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Txt("Spielstand nicht lesbar", Type.Title, align = TextAlign.Center)
+            Txt(if (restored) "Spielstand wiederhergestellt" else "Spielstand nicht lesbar", Type.Title, align = TextAlign.Center)
             Txt(
-                "Spielstand konnte nicht gelesen werden – ein älterer Stand wurde geladen. Die Sicherung bleibt erhalten.",
+                if (restored) {
+                    "Dein eigentlicher Spielstand ist wieder lesbar und wurde geladen. " +
+                        "Der Stand, mit dem du zwischendurch gespielt hast, bleibt gesichert."
+                } else {
+                    "Spielstand konnte nicht gelesen werden – ein älterer Stand wurde geladen. Die Sicherung bleibt erhalten " +
+                        "und wird automatisch geladen, sobald ein Update sie lesen kann."
+                },
                 Type.Body, align = TextAlign.Center,
             )
-            GlowButton("Weiter", onDismiss, Modifier.fillMaxWidth(), color = Palette.Danger)
+            GlowButton("Weiter", onDismiss, Modifier.fillMaxWidth(), color = if (restored) Palette.Success else Palette.Danger)
         }
     }
 }

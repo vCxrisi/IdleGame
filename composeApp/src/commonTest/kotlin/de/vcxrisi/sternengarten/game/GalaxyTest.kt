@@ -1254,17 +1254,27 @@ class GalaxyTest {
             "darkMatter", "totalStardust", "unlocked", "discovered", "supernovaCount", "nextCometId", "playTime",
             "lastSavedEpochMs", "crystals", "stats", "achievements", "missions", "missionDay", "loginStreak",
             "lastLoginDay", "pendingLoginReward", "artifacts", "capsules", "ownedThemes", "activeTheme", "ownedSparks",
-            "activeSpark", "entitlements", "processedTransactions", "balanceVersion", "activeGalaxy", "unlock", "bridges",
+            "activeSpark", "entitlements", "processedTransactions", "balanceVersion", "fallbackFromBackup",
+            "activeGalaxy", "unlock", "bridges",
             "parked",
         )
     }
 
     @Test
     fun goalRewardStopsGrowingWithTheTargets() {
-        val progression = GameEngine(Random(3)).progression
-        val late = progression.rollGalaxyGoals(GameState(galaxyNumber = Balance.GOAL_REWARD_MAX_CYCLE))
-        val later = progression.rollGalaxyGoals(GameState(galaxyNumber = Balance.GOAL_REWARD_MAX_CYCLE + 40))
-        assertEquals(late.first().darkMatter, later.first().darkMatter)
-        assertTrue(progression.rollGalaxyGoals(GameState(galaxyNumber = 2)).first().darkMatter < late.first().darkMatter)
+        // Je Zielart die Belohnung in Zyklus 40 und 80 (über genug Würfe, damit jede Art vorkommt).
+        fun rewards(cycle: Int): Map<GoalKind, Double> = (1..40).flatMap { seed ->
+            GameEngine(Random(seed)).progression.rollGalaxyGoals(GameState(galaxyNumber = cycle))
+        }.associate { it.kind to it.darkMatter }
+        val mid = rewards(40)
+        val late = rewards(80)
+        // Gedeckelte Ziele (z. B. höchstens 60 Sterne, 10 Weiße Zwerge) zahlen nicht mehr, nur weil der Zyklus steigt …
+        for (capped in listOf(GoalKind.STARS_AT_ONCE, GoalKind.ACTIVE_CONSTELLATIONS, GoalKind.FIELDS_OWNED, GoalKind.WHITE_DWARFS)) {
+            assertEquals(mid.getValue(capped), late.getValue(capped), "$capped")
+        }
+        // … Ziele, die weiter schwerer werden, schon.
+        for (growing in listOf(GoalKind.RUN_STARDUST, GoalKind.PRODUCTION_RATE, GoalKind.STAR_LEVEL, GoalKind.RUN_SUPERNOVAS)) {
+            assertTrue(late.getValue(growing) > mid.getValue(growing), "$growing")
+        }
     }
 }

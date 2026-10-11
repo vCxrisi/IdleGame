@@ -307,7 +307,7 @@ fun GameScreen(controller: GameController) {
         val repair = controller.repairNotice
         when {
             repair != null -> RepairDialog(repair, controller::dismissRepairNotice)
-            controller.loadNotice -> LoadNoticeDialog(controller::dismissLoadNotice)
+            controller.loadNotice != null -> LoadNoticeDialog(controller.loadNotice!!, controller::dismissLoadNotice)
             offline != null -> OfflineDialog(offline, kind, clock, controller::dismissOfflineReport)
             // Die Tagesbelohnung begrüßt den Spieler, sobald kein anderer Dialog offen ist.
             login != null && state.lawChoices.isEmpty() -> LoginRewardDialog(state.loginStreak, login) {

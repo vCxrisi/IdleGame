@@ -11,28 +11,29 @@ import kotlin.time.ExperimentalTime
  */
 class SaveRepository(private val settings: Settings = Settings()) {
 
-    /** Lädt den zuletzt gespeicherten Stand; ein unlesbarer wird vorher gesichert (siehe [SaveFormat.choose]). */
+    /** Erst nach dem nächsten erfolgreichen Speichern zu löschen: die gerade wiederhergestellte Sicherung. */
+    private var restoredBackupKey: String? = null
+
+    /** Lädt den Stand; Sicherungen schreibt es sofort (siehe [SaveFormat.choose]). */
     fun load(): LoadResult {
-        val backups = settings.keys
-            .filter { it.startsWith(SaveFormat.UNREADABLE_KEY_PREFIX) }
-            .mapNotNull { key -> settings.getStringOrNull(key)?.let { key to it } }
-            .toMap()
         val result = SaveFormat.choose(
             v3 = settings.getStringOrNull(SaveFormat.KEY),
             v1 = settings.getStringOrNull(SaveFormat.LEGACY_KEY),
             nowMs = nowEpochMillis(),
             keyTaken = settings::hasKey,
-            backups = backups,
+            readBackup = settings::getStringOrNull,
         )
         result.backup?.let { settings.putString(it.key, it.raw) }
-        // Die wiederhergestellte Sicherung wird mit dem nächsten Speichern zum v3-Stand.
-        result.restoredBackupKey?.let { settings.remove(it) }
+        restoredBackupKey = result.restoredBackupKey
         return result
     }
 
     /** Schreibt nur den v3-Schlüssel; der v1-Stand bleibt für ältere Builds unverändert liegen. */
     fun save(state: GameState) {
         settings.putString(SaveFormat.KEY, SaveFormat.encode(state))
+        // Die wiederhergestellte Sicherung steckt jetzt im v3-Stand.
+        restoredBackupKey?.let { settings.remove(it) }
+        restoredBackupKey = null
     }
 
     /** Löscht den Spielstand samt v1-Stand. Sicherungen unlesbarer Stände bleiben erhalten. */

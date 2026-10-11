@@ -83,6 +83,11 @@ data class GameState(
      * gelten als 0 und werden beim Laden migriert (siehe SaveMigration).
      */
     val balanceVersion: Int = 0,
+    /**
+     * Gesetzt, wenn dieser Stand nur ein Notbehelf ist: Der eigentliche Spielstand war unlesbar und liegt unter
+     * diesem Schlüssel gesichert. Kann ihn ein späterer Build lesen, wird er wiederhergestellt (siehe SaveFormat).
+     */
+    val fallbackFromBackup: String? = null,
 
     // ---- Mehrere Galaxien (alle Galaxie-Felder oben beschreiben immer die aktive, siehe GalaxyRun.kt)
     val activeGalaxy: GalaxyKind = GalaxyKind.SPIRAL,
